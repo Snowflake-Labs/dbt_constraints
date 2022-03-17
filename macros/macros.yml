@@ -1,0 +1,12 @@
+version: 2
+
+macros:
+  - name: create_constraints
+    description: |
+      ### create_constraints(['primary_key', 'unique_key', 'unique_combination_of_columns', 'unique', 'foreign_key', 'relationships'], false)
+      * Accepts a list of tests to consider for constraint creation and whether columns should be quoted
+
+    docs:
+      show: true
+
+
