@@ -1,15 +1,21 @@
 # dbt Constraints Package
 This package generates database constraints based on the tests in a dbt project. It is compatible with Snowflake only. 
 
-Although Snowflake doesn't enforce most constraints, the [query optimizer does consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, we can use this package to create constraints with the RELY property to improve query performance.
+The primary reason to add constraints to your Snowflake tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys.
+
+In addition, although Snowflake doesn't enforce most constraints, the [query optimizer does consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints with the RELY property to slightly improve query performance.
 
 ## Please note
 When you add this package, dbt will automatically begin to create unique keys for all your existing `unique` and `dbt_util.unique_combination_of_columns` tests and foreign keys for existing `relationship` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model.
 
 ## Installation
 
-1. Add this package to your `packages.yml` following [these instructions](https://docs.getdbt.com/docs/building-a-dbt-project/package-management/)
-
+1. Add this package to your `packages.yml` following [these instructions](https://docs.getdbt.com/docs/building-a-dbt-project/package-management/). If you are comfortable with testing the very latest code, the following code will pull the very latest version of the package.
+```yml
+packages:
+  - git: "https://github.com/danflippo/dbt_constraints.git"
+    revision: main
+```
 2. Run `dbt deps`.
 
 3. Optionally add `primary_key`, `unique_key`, or `foreign_key` tests to your model like the following examples.
