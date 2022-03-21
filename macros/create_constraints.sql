@@ -138,7 +138,7 @@
                 database=table_models[0].database,
                 schema=table_models[0].schema,
                 identifier=table_models[0].name) -%}
-            {%- if dbt_constraints.table_column_exists(column_names, table_relation) -%}
+            {%- if dbt_constraints.table_column_exists(table_relation, column_names) -%}
                 {%- if test_model.test_metadata.name == "primary_key" -%}
                     {%- do dbt_constraints.create_primary_key(table_relation, column_names, quote_columns) -%}
                 {%- else  -%}
@@ -195,9 +195,9 @@
                 schema=pk_model.schema,
                 identifier=pk_model.name) -%}
 
-            {%- if not dbt_constraints.table_column_exists(pk_column_names, pk_table_relation) -%}
+            {%- if not dbt_constraints.table_column_exists(pk_table_relation, pk_column_names) -%}
                 {%- do log("Skipping foreign key because a physical column was not found on the pk table: " ~ pk_column_names ~ " in " ~ pk_model.name, info=true) -%}
-            {%- elif not dbt_constraints.table_column_exists(fk_column_names, fk_table_relation) -%}
+            {%- elif not dbt_constraints.table_column_exists(fk_table_relation, fk_column_names) -%}
                 {%- do log("Skipping foreign key because a physical column was not found on the fk table: " ~ fk_column_names ~ " in " ~ fk_model.name, info=true) -%}
             {%- else  -%}
                 {%- do dbt_constraints.create_foreign_key(test_model, pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, quote_columns) -%} 
@@ -210,12 +210,17 @@
 {%- endmacro -%}
 
 
-{#- This macro is used in create macros to avoid duplicate constraints and to limit
-    FK where no PK/UK constraint exists on the parent table -#}
-{%- macro pk_uk_constraint_exists(qualified_table_name, pk_name, uk_name) -%}
-    {{ return(adapter.dispatch('pk_uk_constraint_exists', 'dbt_constraints')(qualified_table_name, pk_name, uk_name)) }}
+{#- This macro is used in create macros to avoid duplicate PK/UK constraints 
+    and to skip FK where no PK/UK constraint exists on the parent table -#}
+{%- macro unique_constraint_exists(table_relation, column_names) -%}
+    {{ return(adapter.dispatch('unique_constraint_exists', 'dbt_constraints')(table_relation, column_names)) }}
 {%- endmacro -%}
 
+
+{#- This macro is used in create macros to avoid duplicate FK constraints -#}
+{%- macro foreign_key_exists(table_relation, column_names) -%}
+    {{ return(adapter.dispatch('foreign_key_exists', 'dbt_constraints')(table_relation, column_names)) }}
+{%- endmacro -%}
 
 
 {#- Create implementation specific primary keys -#}
@@ -239,7 +244,7 @@
 
 
 
-{%- macro table_column_exists(column_list, table_relation) -%}
+{%- macro table_column_exists(table_relation, column_list) -%}
 
     {%- set tab_column_list = adapter.get_columns_in_relation(table_relation)|map('upper') -%}
     {%- for column in column_list|map('upper') if not column not in tab_column_list -%}
