@@ -8,6 +8,13 @@ In addition, although Snowflake doesn't enforce most constraints, the [query opt
 ## Please note
 When you add this package, dbt will automatically begin to create unique keys for all your existing `unique` and `dbt_util.unique_combination_of_columns` tests and foreign keys for existing `relationship` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model.
 
+### Disabling automatic constraint generation
+The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation.
+```yml
+vars:
+  dbt_constraints_enabled: false
+```
+
 ## Installation
 
 1. Add this package to your `packages.yml` following [these instructions](https://docs.getdbt.com/docs/building-a-dbt-project/package-management/). If you are comfortable with testing the very latest code, the following code will pull the very latest version of the package.

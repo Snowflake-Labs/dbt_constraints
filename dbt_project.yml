@@ -22,3 +22,8 @@ clean-targets:         # directories to be removed by `dbt clean`
 
 on-run-end:
   - "{{ dbt_constraints.create_constraints() }}"
+
+# Global variables
+vars:
+  # The package can be temporarily disabled using this variable
+  dbt_constraints_enabled: true

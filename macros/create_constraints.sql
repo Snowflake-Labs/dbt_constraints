@@ -55,7 +55,7 @@
             'foreign_key', 
             'relationships'],
         quote_columns=false) -%}
-    {%- if execute -%}
+    {%- if execute and var('dbt_constraints_enabled', false) -%}
      
         {%- if 'primary_key' in constraint_types -%}
             {%- do dbt_constraints.create_constraints_by_type(['primary_key'], quote_columns) -%}
