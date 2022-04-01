@@ -71,7 +71,7 @@ packages:
 
 ```
 
-## DBT_CONSTRAINTS Limitations
+## dbt_constraints Limitations
 Generally, if you don't meet a requirement, tests are still executed but the constraint is skipped rather than producing an error.
 * All models involved in a constraint must be materialized as table, incremental, or snapshot
 * Constraints will not be created on sources, only models. You can use the PK/UK/FK tests with sources but constraints won't be generated.
