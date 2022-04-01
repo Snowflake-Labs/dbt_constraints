@@ -1,7 +1,7 @@
 # dbt Constraints Package
-This package generates database constraints based on the tests in a dbt project. It is compatible with Snowflake only. 
+This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake only. 
 
-The primary reason to add constraints to your Snowflake tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys.
+The primary reason to add constraints to your database tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys.
 
 In addition, although Snowflake doesn't enforce most constraints, the [query optimizer does consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints with the RELY property to slightly improve query performance.
 
@@ -14,6 +14,10 @@ The `dbt_constraints_enabled` variable can be set to `false` in your project to 
 vars:
   dbt_constraints_enabled: false
 ```
+
+### Dependencies
+`require-dbt-version: ">=1.0.0"`
+The package's macros depend on the results and graph object schemas of dbt >=1.0.0
 
 ## Installation
 

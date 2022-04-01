@@ -2,6 +2,11 @@
 name: 'dbt_constraints'
 version: '0.0.1'
 config-version: 2
+
+# These macros depend on the results and graph objects in dbt >=0.19.0
+# and has been tested with dbt >=1.0.0
+require-dbt-version: ">=1.0.0"
+
 profile: 'dbt_constraints'
 
 # All tests and macros in this packages are found in the macro path
