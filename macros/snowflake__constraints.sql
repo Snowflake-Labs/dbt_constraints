@@ -9,7 +9,7 @@
         {%- set query -%}
         ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} ) RELY
         {%- endset -%}
-        {%- do log("Creating primary key: " ~ query, info=true) -%}
+        {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
         {%- do run_query(query) -%}
 
     {%- else -%}            
@@ -32,7 +32,7 @@
         {%- set query -%}
         ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} ) RELY
         {%- endset -%}
-        {%- do log("Creating unique key: " ~ query, info=true) -%}
+        {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
         {%- do run_query(query) -%}
 
     {%- else -%}            
@@ -56,7 +56,7 @@
             {%- set query -%}
             ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} ) RELY
             {%- endset -%}
-            {%- do log("Creating foreign key: " ~ query, info=true) -%}
+            {%- do log("Creating foreign key: " ~ constraint_name, info=true) -%}
             {%- do run_query(query) -%}
 
         {%- else -%}            
