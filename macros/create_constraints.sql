@@ -1,32 +1,37 @@
-{#- Define three explicit tests for PK, UK, and FK that
-    can be overridden by DB implementations -#}
+{#- Define three tests for PK, UK, and FK that can be overridden by DB implementations.
+    These tests have overloaded parameter names to be as flexible as possible. -#}
 
-{%- test primary_key(model, column_name=none, column_names=[], quote_columns=false) -%}
+{%- test primary_key(model, 
+        column_name=none, column_names=[], 
+        quote_columns=false) -%}
+
     {%- if column_names|count == 0 and column_name -%}
         {%- do column_names.append(column_name) -%}
     {%- endif -%}
+
     {{ return(adapter.dispatch('primary_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
+
 {%- endtest -%}
 
-{#- For UK we can leverage the dbt_utils.test_unique_combination_of_columns test -#}
-{%- test unique_key(model, column_name=none, column_names=[], quote_columns=false) -%}
+
+{%- test unique_key(model, 
+        column_name=none, column_names=[], 
+        quote_columns=false) -%}
+
     {%- if column_names|count == 0 and column_name -%}
         {%- do column_names.append(column_name) -%}
     {%- endif -%}
-    {{ return(adapter.dispatch('test_unique_combination_of_columns', 'dbt_utils')(model, column_names, quote_columns)) }}
+
+    {{ return(adapter.dispatch('unique_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
+
 {%- endtest -%}
 
-{%- test foreign_key(
-            model, 
-            column_name=none, 
-            fk_column_name=none,
-            fk_column_names=[], 
-            pk_table_name=none, 
-            to=none, 
-            pk_column_name=none, 
-            pk_column_names=[], 
-            field=none, 
-            quote_columns=false) -%}
+
+{%- test foreign_key(model, 
+        column_name=none, fk_column_name=none, fk_column_names=[], 
+        pk_table_name=none, to=none, 
+        pk_column_name=none, pk_column_names=[], field=none, 
+        quote_columns=false) -%}
 
     {%- if pk_column_names|count == 0 and (pk_column_name or field) -%}
         {%- do pk_column_names.append( (pk_column_name or field) ) -%}
@@ -37,7 +42,29 @@
     {%- set pk_table_name = pk_table_name or to -%}
 
     {{ return(adapter.dispatch('foreign_key', 'dbt_constraints')(model, fk_column_names, pk_table_name, pk_column_names, quote_columns)) }}
+
 {%- endtest -%}
+
+
+
+
+{#- Define three create macros for PK, UK, and FK that
+    can be overridden by DB implementations -#}
+
+{%- macro create_primary_key(table_model, column_names, quote_columns=false) -%}
+    {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, quote_columns)) }}
+{%- endmacro -%}
+
+
+{%- macro create_unique_key(table_model, column_names, quote_columns=false) -%}
+    {{ return(adapter.dispatch('create_unique_key', 'dbt_constraints')(table_model, column_names, quote_columns)) }}
+{%- endmacro -%}
+
+
+{%- macro create_foreign_key(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns=false) -%}
+    {{ return(adapter.dispatch('create_foreign_key', 'dbt_constraints')(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns)) }}
+{%- endmacro -%}
+
 
 
 
@@ -82,16 +109,9 @@
 
 
 
+
 {#- This macro is called internally and passed which constraint types to create. -#}
-{%- macro create_constraints_by_type(
-        constraint_types=[
-            'primary_key', 
-            'unique_key', 
-            'unique_combination_of_columns', 
-            'unique', 
-            'foreign_key', 
-            'relationships'],
-        quote_columns=false ) -%}
+{%- macro create_constraints_by_type(constraint_types, quote_columns) -%}
 
     {#- Loop through the results and find all tests that passed and match the constraint_types -#}
     {%- for res in results
@@ -138,7 +158,7 @@
                 database=table_models[0].database,
                 schema=table_models[0].schema,
                 identifier=table_models[0].name) -%}
-            {%- if dbt_constraints.table_column_exists(table_relation, column_names) -%}
+            {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names) -%}
                 {%- if test_model.test_metadata.name == "primary_key" -%}
                     {%- do dbt_constraints.create_primary_key(table_relation, column_names, quote_columns) -%}
                 {%- else  -%}
@@ -195,9 +215,9 @@
                 schema=pk_model.schema,
                 identifier=pk_model.name) -%}
 
-            {%- if not dbt_constraints.table_column_exists(pk_table_relation, pk_column_names) -%}
+            {%- if not dbt_constraints.table_columns_all_exist(pk_table_relation, pk_column_names) -%}
                 {%- do log("Skipping foreign key because a physical column was not found on the pk table: " ~ pk_column_names ~ " in " ~ pk_model.name, info=true) -%}
-            {%- elif not dbt_constraints.table_column_exists(fk_table_relation, fk_column_names) -%}
+            {%- elif not dbt_constraints.table_columns_all_exist(fk_table_relation, fk_column_names) -%}
                 {%- do log("Skipping foreign key because a physical column was not found on the fk table: " ~ fk_column_names ~ " in " ~ fk_model.name, info=true) -%}
             {%- else  -%}
                 {%- do dbt_constraints.create_foreign_key(test_model, pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, quote_columns) -%} 
@@ -210,41 +230,9 @@
 {%- endmacro -%}
 
 
-{#- This macro is used in create macros to avoid duplicate PK/UK constraints 
-    and to skip FK where no PK/UK constraint exists on the parent table -#}
-{%- macro unique_constraint_exists(table_relation, column_names) -%}
-    {{ return(adapter.dispatch('unique_constraint_exists', 'dbt_constraints')(table_relation, column_names)) }}
-{%- endmacro -%}
 
-
-{#- This macro is used in create macros to avoid duplicate FK constraints -#}
-{%- macro foreign_key_exists(table_relation, column_names) -%}
-    {{ return(adapter.dispatch('foreign_key_exists', 'dbt_constraints')(table_relation, column_names)) }}
-{%- endmacro -%}
-
-
-{#- Create implementation specific primary keys -#}
-{%- macro create_primary_key(table_model, column_names, quote_columns=false) -%}
-    {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, quote_columns)) }}
-{%- endmacro -%}
-
-
-
-{#- Create implementation specific unique keys -#}
-{%- macro create_unique_key(table_model, column_names, quote_columns=false) -%}
-    {{ return(adapter.dispatch('create_unique_key', 'dbt_constraints')(table_model, column_names, quote_columns)) }}
-{%- endmacro -%}
-
-
-
-{#- Create implementation specific foreign keys -#}
-{%- macro create_foreign_key(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns=false) -%}
-    {{ return(adapter.dispatch('create_foreign_key', 'dbt_constraints')(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns)) }}
-{%- endmacro -%}
-
-
-
-{%- macro table_column_exists(table_relation, column_list) -%}
+{# This macro tests that all the column names passed to the macro can be found on the table, ignoring case #}
+{%- macro table_columns_all_exist(table_relation, column_list) -%}
 
     {%- set tab_column_list = adapter.get_columns_in_relation(table_relation)|map('upper') -%}
     {%- for column in column_list|map('upper') if not column not in tab_column_list -%}
