@@ -6,7 +6,7 @@ The primary reason to add constraints to your Snowflake tables is that many tool
 In addition, although Snowflake doesn't enforce most constraints, the [query optimizer does consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints with the RELY property to slightly improve query performance.
 
 ## Please note
-When you add this package, dbt will automatically begin to create unique keys for all your existing `unique` and `dbt_util.unique_combination_of_columns` tests and foreign keys for existing `relationship` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model.
+When you add this package, dbt will automatically begin to create unique keys for all your existing `unique` and `dbt_utils.unique_combination_of_columns` tests and foreign keys for existing `relationship` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model.
 
 ### Disabling automatic constraint generation
 The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation.
