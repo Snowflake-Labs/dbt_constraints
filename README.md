@@ -80,7 +80,7 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 * Constraints will not be created on sources, only models. You can use the PK/UK/FK tests with sources but constraints won't be generated.
 * All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 * Constraints are not created for failed tests
-* `primary_key`, `unique_key`, and `foreign_key` constraints are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
+* `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
 * Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
 * The order of columns on a foreign key test must match betweek the FK columnns and PK columns
 * The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model.
