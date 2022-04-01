@@ -36,9 +36,9 @@ packages:
       - name: OL_PK
         tests:
           - dbt_constraints.primary_key
-      - name: OL_PK
+      - name: OL_UK
         tests:
-          - dbt_constraints.primary_key
+          - dbt_constraints.unique_key
       - name: OL_CUSTKEY
         tests:
           - dbt_constraints.foreign_key:
