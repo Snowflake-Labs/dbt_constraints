@@ -16,7 +16,6 @@ vars:
 ```
 
 ### Dependencies
-`require-dbt-version: ">=1.0.0"`
 The package's macros depend on the results and graph object schemas of dbt >=1.0.0
 
 ## Installation
