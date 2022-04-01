@@ -49,7 +49,7 @@ packages:
       - dbt_constraints.primary_key:
           column_name: OL_PK
       - dbt_constraints.unique_key:
-          column_names: OL_ORDERKEY
+          column_name: OL_ORDERKEY
       - dbt_constraints.foreign_key:
           fk_column_name: OL_CUSTKEY
           pk_table_name: ref('DIM_CUSTOMERS')
