@@ -2,24 +2,16 @@
 name: 'dbt_constraints'
 version: '0.0.1'
 config-version: 2
-
-# This setting configures which "profile" dbt uses for this project.
 profile: 'dbt_constraints'
 
-# These configurations specify where dbt should look for different types of files.
-# The `model-paths` config, for example, states that models in this project can be
-# found in the "models/" directory. You probably won't need to change these!
-model-paths: ["models"]
-analysis-paths: ["analyses"]
-test-paths: ["tests"]
-seed-paths: ["seeds"]
+# All tests and macros in this packages are found in the macro path
 macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
-target-path: "target"  # directory which will store compiled SQL files
 clean-targets:         # directories to be removed by `dbt clean`
+  - "logs"
   - "target"
   - "dbt_packages"
 
+# This package adds an automatic hook to create constraints
 on-run-end:
   - "{{ dbt_constraints.create_constraints() }}"
 
