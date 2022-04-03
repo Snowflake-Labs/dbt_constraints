@@ -9,7 +9,7 @@
         {%- do column_names.append(column_name) -%}
     {%- endif -%}
 
-    {{ return(adapter.dispatch('primary_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
+    {{ return(adapter.dispatch('test_primary_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
 
 {%- endtest -%}
 
@@ -22,7 +22,7 @@
         {%- do column_names.append(column_name) -%}
     {%- endif -%}
 
-    {{ return(adapter.dispatch('unique_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
+    {{ return(adapter.dispatch('test_unique_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
 
 {%- endtest -%}
 
@@ -41,7 +41,7 @@
     {%- endif -%}
     {%- set pk_table_name = pk_table_name or to -%}
 
-    {{ return(adapter.dispatch('foreign_key', 'dbt_constraints')(model, fk_column_names, pk_table_name, pk_column_names, quote_columns)) }}
+    {{ return(adapter.dispatch('test_foreign_key', 'dbt_constraints')(model, fk_column_names, pk_table_name, pk_column_names, quote_columns)) }}
 
 {%- endtest -%}
 
@@ -63,6 +63,19 @@
 
 {%- macro create_foreign_key(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns=false) -%}
     {{ return(adapter.dispatch('create_foreign_key', 'dbt_constraints')(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns)) }}
+{%- endmacro -%}
+
+
+
+{#- Define two macros for detecting if PK, UK, and FK exist that
+    can be overridden by DB implementations -#}
+
+{%- macro unique_constraint_exists(table_relation, column_names) -%}
+    {{ return(adapter.dispatch('unique_constraint_exists', 'dbt_constraints')(table_relation, column_names) ) }}
+{%- endmacro -%}
+
+{%- macro foreign_key_exists(table_relation, column_names) -%}
+    {{ return(adapter.dispatch('foreign_key_exists', 'dbt_constraints')(table_relation, column_names)) }}
 {%- endmacro -%}
 
 
@@ -240,4 +253,23 @@
     {%- endfor -%}
     {{ return(true) }}
 
+{%- endmacro -%}
+
+
+
+{# This macro allows us to compare two sets of columns to see if they are the same, ignoring case #}
+{%- macro column_list_matches(listA, listB) -%}
+    {# Test if A is empty or the lists are not the same size #}
+    {%- if listA | count > 0 and listA | count == listB | count  -%}
+        {# Fail if there are any columns in A that are not in B #}
+        {%- for valueFromA in listA|map('upper') -%}
+            {%- if valueFromA|upper not in listB| map('upper')  -%}
+                {{ return(false) }}
+            {%- endif -%}
+        {% endfor %}
+        {# Since we know the count is the same, A must equal B #}
+        {{ return(true) }}
+    {%- else -%}
+        {{ return(false) }}
+    {%- endif -%}
 {%- endmacro -%}

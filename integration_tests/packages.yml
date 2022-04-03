@@ -1,0 +1,7 @@
+packages:
+
+  # We will test unique keys based on dbt_utils.unique_combination_of_columns
+  - package: dbt-labs/dbt_utils
+    version: [">=0.8.0"]
+
+  - local: ../

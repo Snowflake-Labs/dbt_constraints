@@ -1,20 +1,18 @@
 {#- Test if the primary key is valid -#}
-{%- macro default__primary_key(model, column_names, quote_columns=false) -%}
+{%- macro default__test_primary_key(model, column_names, quote_columns=false) -%}
 
 {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) %}
 
 {#- This test will return for any duplicates and if any of the key columns is null -#}
 with validation_errors as (
     select
-        {{columns_csv}}
+        {{columns_csv}}, count(*)
     from {{model}}
     group by {{columns_csv}}
     having count(*) > 1 
-        or sum( 0
-            {% for column in fk_columns_list -%}
-            + case when {{column}} is null then 1 else 0 end
-            {% endfor %}
-        ) > 0
+        {% for column in column_names -%}
+        or {{column}} is null 
+        {% endfor %}
 )
 
 select *
@@ -25,7 +23,7 @@ from validation_errors
 
 
 {#- Test if the unique key is valid -#}
-{%- macro default__unique_key(model, column_names, quote_columns=false) -%}
+{%- macro default__test_unique_key(model, column_names, quote_columns=false) -%}
 
 {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) %}
 
@@ -46,7 +44,7 @@ from validation_errors
 
 
 {#- Test if the foreign key is valid -#}
-{%- macro default__foreign_key(model, fk_column_names, pk_table_name, pk_column_names, quote_columns=false) -%}
+{%- macro default__test_foreign_key(model, fk_column_names, pk_table_name, pk_column_names, quote_columns=false) -%}
 
 {%- set fk_columns_list=dbt_constraints.get_quoted_column_list(fk_column_names, quote_columns) %}
 {%- set pk_columns_list=dbt_constraints.get_quoted_column_list(pk_column_names, quote_columns) %}

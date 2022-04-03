@@ -1,0 +1,205 @@
+
+version: 2
+
+models:
+
+  # In the first 2 models we are deliberately creating a bunch of duplicate PK/UK to test
+  # that DBT_CONSTRAINTS doesn't try to create constraints multiple times.
+  # This also shows how to apply PK/UK tests inline, with one column
+  # and with multiple columns
+  - name: dim_part
+    columns:
+      - name: p_partkey
+        description: "Primary key for this table"
+        tests:
+          - dbt_constraints.primary_key
+          - unique
+          - not_null
+      - name: p_partkey_seq
+        description: "Unique sequence number key"
+        tests:
+          - dbt_constraints.unique_key
+          - unique
+    tests:
+      - dbt_constraints.unique_key:
+          column_name: p_partkey
+
+  - name: dim_customers
+    description: "Customer dimension"
+    columns:
+      - name: c_custkey
+        description: "The primary key for dim_customers"
+        tests:
+          - dbt_constraints.unique_key
+          - unique
+          - not_null
+      - name: c_custkey_seq
+        description: "sequence key for dim_customers"
+        tests:
+          - dbt_constraints.unique_key
+          - unique
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: c_custkey
+
+  - name: dim_customers_view
+    description: "Test that we run tests but don't create constraints on views"
+    columns:
+      - name: c_custkey
+        tests:
+          - dbt_constraints.primary_key
+      - name: c_custkey_seq
+        tests:
+          - dbt_constraints.unique_key
+  
+
+  # Here we are deliberately creating a bunch of duplicate FK to test
+  # that DBT_CONSTRAINTS doesn't try to create constraints multiple times.
+  # This also shows how to apply PK/UK tests inline, with one column
+  # and with multiple columns
+  - name: dim_orders
+    description: "All Orders"
+    columns:
+      - name: o_orderkey
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+      - name: o_custkey
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: c_custkey
+          - dbt_constraints.foreign_key:
+              pk_table_name: ref('dim_customers')
+              pk_column_name: c_custkey
+          - dbt_constraints.foreign_key:
+              pk_table_name: ref('dim_customers')
+              pk_column_names:
+                - c_custkey
+    tests:
+      - dbt_constraints.foreign_key:
+          fk_column_name: o_custkey
+          pk_table_name: ref('dim_customers')
+          pk_column_name: c_custkey
+      - dbt_constraints.foreign_key:
+          fk_column_names:
+            - o_custkey
+          pk_table_name: ref('dim_customers')
+          pk_column_names:
+            - c_custkey
+
+  - name: fact_order_line
+    description: "Fact Order Lines"
+    columns:
+      - name: l_orderkey
+        description: "FK to dim_orders and first key in PK"
+        tests:
+          - relationships:
+              to: ref('dim_orders')
+              field: o_orderkey
+      - name: l_linenumber
+        description: "Order Line Number and second key in PK"
+      - name: integration_id
+        description: "Concatenation of PK colums for the unique and not_null tests"
+        tests:
+          - unique
+          - not_null
+    tests:
+      # Demonstration that the primary_key test can accept multiple columns
+      - dbt_constraints.primary_key:
+          column_names:
+            - l_orderkey
+            - l_linenumber
+      # Test multi-column FK
+      - dbt_constraints.foreign_key:
+          fk_column_names:
+            - l_partkey
+            - l_suppkey
+          pk_table_name: ref('dim_part_supplier')
+          pk_column_names:
+            - ps_partkey
+            - ps_suppkey
+  
+  - name: dim_duplicate_orders
+    description: "Test that we do not try to create PK/UK on failed tests"
+    columns:
+      - name: o_orderkey
+        description: "The primary key for this table"
+      - name: o_orderkey_seq
+        description: "duplicate seq column to test UK"
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey_seq
+          config:
+            severity: warn
+
+  - name: fact_order_line_missing_orders
+    description: "Test that we do not create FK on failed tests"
+    columns:
+      - name: l_orderkey
+        description: "FK to dim_orders and first key in PK"
+      - name: l_linenumber
+        description: "Order Line Number and second key in PK"
+      - name: integration_id
+        description: "Test whether we still create this valid UK"
+        tests:
+          - unique
+          - not_null
+    tests:
+      - dbt_constraints.foreign_key:
+          fk_column_name: l_orderkey
+          pk_table_name: ref('dim_missing_orders')
+          pk_column_name: o_orderkey
+          config:
+            severity: warn
+      # Test that we still create this valid primary key
+      - dbt_constraints.primary_key:
+          column_names:
+            - l_orderkey
+            - l_linenumber
+      # Test that we do not create a FK because the PK/UK is missing
+      - dbt_constraints.foreign_key:
+          fk_column_names: 
+            - l_partkey
+            - l_suppkey
+          pk_table_name: ref('dim_part_supplier_missing_con')
+          pk_column_names:
+            - ps_partkey
+            - ps_suppkey
+
+  - name: dim_orders_null_keys
+    description: "All Orders"
+    columns:
+      - name: o_custkey
+        tests:
+          # test that we still create this valid foreign key
+          - dbt_constraints.foreign_key:
+              pk_table_name: ref('dim_customers')
+              pk_column_name: c_custkey
+    tests:
+      # test that we do not create this PK with missing values
+      - dbt_constraints.primary_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
+      # test that we still create this valid unique key
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey_seq
+
+  - name: dim_part_supplier
+    description: "Multi column UK"
+    tests:
+      - dbt_constraints.unique_key:
+          column_names: 
+            - ps_partkey
+            - ps_suppkey
+
+  - name: dim_part_supplier_missing_con
+    description: "Table is missing constraints to test FK won't be generated to it"

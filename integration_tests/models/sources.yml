@@ -1,0 +1,109 @@
+
+version: 2
+
+# We are creating sources that match our seed tables to test source
+# tests do not result in constraints
+sources:
+  - name: tpc_h
+    schema: "{{ target.schema }}"
+    tables:
+      - name: part
+        columns:
+          - name: p_partkey
+            description: "The primary key for this table"
+            tests:
+              - unique
+              - not_null
+
+      - name: partsupp
+        columns:
+          - name: ps_partkey
+            description: "Part of compound primary key for this table"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('tpc_h', 'part')
+                  field: p_partkey
+          - name: ps_suppkey
+            description: "Part of compound primary key for this table"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('tpc_h', 'supplier')
+                  field: s_suppkey
+        tests:
+          # This is a higher performance way to test compound PK/UK
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - "ps_partkey"
+                - "ps_suppkey"
+          # How to validate a compound primary key natively
+          - unique:
+              column_name: "coalesce(ps_partkey::varchar, '') || '~' || coalesce(ps_suppkey::varchar, '')"
+
+      - name: "supplier"
+        columns:
+          - name: "s_suppkey"
+            description: "The primary key for this table"
+            tests:
+              - unique
+              - not_null
+          - name: s_nationkey
+            tests:
+              - not_null
+
+      - name: orders
+        columns:
+          - name: o_orderkey
+            description: "The primary key for this table"
+            tests:
+              - unique
+              - not_null
+          - name: o_custkey
+            tests:
+              - not_null
+              - relationships:
+                  to: source('tpc_h', 'CUSTOMER')
+                  field: c_custkey
+
+      - name: customer
+        columns:
+          - name: c_custkey
+            description: "The primary key for dim_customers"
+            tests:
+              - unique
+              - not_null
+          - name: c_name
+            description: "Customer Name"
+            tests: 
+              - not_null
+          - name: c_nationkey
+            tests:
+              - not_null
+
+      - name: lineitem
+        columns:
+          - name: l_orderkey
+            tests:
+              - not_null
+              - relationships:
+                  to: source('tpc_h', 'orders')
+                  field: o_orderkey
+          - name: l_linenumber
+            tests:
+              - not_null
+        tests:
+          # This is a higher performance way to test compound PK/UK
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - l_orderkey
+                - l_linenumber
+          # How to validate a compound primary key natively
+          - unique:
+              column_name: "coalesce(l_orderkey::varchar, '') || '~' || coalesce(l_linenumber::varchar, '')"
+
+          # How to validate a compound foreign key
+          - relationships:
+              column_name: "coalesce(l_partkey::varchar, '') || '~' || coalesce(l_suppkey::varchar, '')"
+              to: source('tpc_h', 'partsupp')
+              field: "coalesce(ps_partkey::varchar, '') || '~' || coalesce(ps_suppkey::varchar, '')"
