@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+*.sh -linguist-detectable
+*.sql linguist-detectable
+*.sql linguist-language=SQL
+*.yml linguist-language=SQL
+docs/* linguist-documentation
+integration_tests/* linguist-documentation
