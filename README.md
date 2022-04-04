@@ -2,7 +2,7 @@
 
 This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake and PostgreSQL only. 
 
-## Why data engineers should add referential constraints to dbt projects
+## Why data engineers should add referential integrity constraints
 
 The primary reason to add constraints to your database tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys. This can both save time and avoid mistakes.
 
