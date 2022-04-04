@@ -10,6 +10,8 @@ In addition, although Snowflake doesn't enforce most constraints, the [query opt
 
 Many other databases including PostgreSQL, SQL Server, Oracle, MySQL, and DB2 can use referencial integrity constraints to perform "join elimination" to remove tables from an execution plan. This commonly occurs when you query a subset of columns from a view and some of the tables in the view are unnecessary. Even on databases that do not support join elimination, some BI and visualization tools will also rewrite their queries based on constraint information, producing the same effect.
 
+Finally, although most columnar databases including Snowflake do not use or need indexes, most row-oriented databases require indexes on their primary key columns in order to perform efficient joins between tables. Typically a primary key or unique key constraint is enforced on such databases using such indexes. Having dbt create the indexes automatically can slightly reduce the degree of performance tuning necessary for row-oriented databases.
+
 ## Please note
 
 When you add this package, dbt will automatically begin to create unique keys for all your existing `unique` and `dbt_utils.unique_combination_of_columns` tests and foreign keys for existing `relationship` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model.
