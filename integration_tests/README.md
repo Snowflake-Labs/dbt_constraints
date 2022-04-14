@@ -2,11 +2,12 @@
 This set of models and associated tests is designed to test all the supported tests as well as most unsupported scenarios.
 
 ## Environment
-All of these tests are designed to be executed against a Snowflake account that has the SNOWFLAKE_SAMPLE_DATA database. The SNOWFLAKE_SAMPLE_DATA database is a share from Snowflake to customer accounts when they are created. Inside of this database are several schemas with TPC-H test data that has been used to test the validity of primary keys, unique keys, and foreign keys.
+A set of TPC-H test data has been included as seeds to test the validity of primary keys, unique keys, and foreign keys.
 
 ## Running the tests
-1. Set up a SNOWFLAKE profile in your ~/.dbt/profiles.yml to a Snowflake schema you can create tables and views in.
-2. Execute `dbt build`
+1. Set up a `dbt_constraints` profile in your ~/.dbt/profiles.yml to a Snowflake or PostgreSQL schema you can create tables and views in.
+2. Execute `dbt seed`
+3. Execute `dbt build`
 
 A successful execution of the project should result in the following messages about constraints being created:
 ```
