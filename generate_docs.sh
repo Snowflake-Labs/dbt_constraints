@@ -1,5 +1,6 @@
 #!/bin/bash
 
+dbt clean
 dbt deps
 dbt compile
 dbt docs generate

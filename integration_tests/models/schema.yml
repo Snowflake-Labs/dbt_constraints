@@ -52,7 +52,7 @@ models:
       - name: c_custkey_seq
         tests:
           - dbt_constraints.unique_key
-  
+
 
   # Here we are deliberately creating a bunch of duplicate FK to test
   # that DBT_CONSTRAINTS doesn't try to create constraints multiple times.
@@ -122,7 +122,7 @@ models:
           pk_column_names:
             - ps_partkey
             - ps_suppkey
-  
+
   - name: dim_duplicate_orders
     description: "Test that we do not try to create PK/UK on failed tests"
     columns:
@@ -166,7 +166,7 @@ models:
             - l_linenumber
       # Test that we do not create a FK because the PK/UK is missing
       - dbt_constraints.foreign_key:
-          fk_column_names: 
+          fk_column_names:
             - l_partkey
             - l_suppkey
           pk_table_name: ref('dim_part_supplier_missing_con')
@@ -197,7 +197,7 @@ models:
     description: "Multi column UK"
     tests:
       - dbt_constraints.unique_key:
-          column_names: 
+          column_names:
             - ps_partkey
             - ps_suppkey
 

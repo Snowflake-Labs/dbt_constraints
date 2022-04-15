@@ -3,7 +3,7 @@
     {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
-    {#- Check that the table does not already have this PK/UK -#} 
+    {#- Check that the table does not already have this PK/UK -#}
     {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
 
         {%- set query -%}
@@ -12,7 +12,7 @@
         {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
         {%- do run_query(query) -%}
 
-    {%- else -%}            
+    {%- else -%}
         {%- do log("Skipping " ~ constraint_name ~ " because PK/UK already exists: " ~ table_relation ~ " " ~ column_names, info=false) -%}
     {%- endif -%}
 
@@ -26,7 +26,7 @@
     {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
-    {#- Check that the table does not already have this PK/UK -#} 
+    {#- Check that the table does not already have this PK/UK -#}
     {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
 
         {%- set query -%}
@@ -35,7 +35,7 @@
         {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
         {%- do run_query(query) -%}
 
-    {%- else -%}            
+    {%- else -%}
         {%- do log("Skipping " ~ constraint_name ~ " because PK/UK already exists: " ~ table_relation ~ " " ~ column_names, info=false) -%}
     {%- endif -%}
 
@@ -50,7 +50,7 @@
     {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
     {#- Check that the PK table has a PK or UK -#}
     {%- if dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names) -%}
-        {#- Check if the table already has this foreign key -#} 
+        {#- Check if the table already has this foreign key -#}
         {%- if not dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names) -%}
 
             {%- set query -%}
@@ -59,10 +59,10 @@
             {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
             {%- do run_query(query) -%}
 
-        {%- else -%}            
+        {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because FK already exists: " ~ fk_table_relation ~ " " ~ fk_column_names, info=false) -%}
         {%- endif -%}
-    {%- else -%} 
+    {%- else -%}
         {%- do log("Skipping " ~ constraint_name ~ " because a PK/UK was not found on the PK table: " ~ pk_table_relation ~ " " ~ pk_column_names, info=true) -%}
     {%- endif -%}
 
@@ -70,7 +70,7 @@
 
 
 
-{#- This macro is used in create macros to avoid duplicate PK/UK constraints 
+{#- This macro is used in create macros to avoid duplicate PK/UK constraints
     and to skip FK where no PK/UK constraint exists on the parent table -#}
 {%- macro snowflake__unique_constraint_exists(table_relation, column_names) -%}
     {%- set lookup_query -%}
@@ -86,7 +86,7 @@
             {%- endif -%}
         {% endfor %}
     {%- endif -%}#}
-    
+
     {%- set lookup_query -%}
     SHOW PRIMARY KEYS IN TABLE {{table_relation}};
     {%- endset -%}

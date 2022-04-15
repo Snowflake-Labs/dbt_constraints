@@ -9,9 +9,9 @@ with validation_errors as (
         {{columns_csv}}, count(*)
     from {{model}}
     group by {{columns_csv}}
-    having count(*) > 1 
+    having count(*) > 1
         {% for column in column_names -%}
-        or {{column}} is null 
+        or {{column}} is null
         {% endfor %}
 )
 
@@ -33,7 +33,7 @@ with validation_errors as (
         {{columns_csv}}
     from {{model}}
     group by {{columns_csv}}
-    having count(*) > 1 
+    having count(*) > 1
 )
 
 select *
@@ -51,7 +51,7 @@ from validation_errors
 {%- set fk_columns_csv=dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) %}
 {%- set pk_columns_csv=dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) %}
 
-{#- This test will return if all the columns are not null 
+{#- This test will return if all the columns are not null
     and the values are not found in the referenced PK table -#}
 with fk_table as (
   select
@@ -90,7 +90,7 @@ from validation_errors
 
 
 {%- macro get_quoted_column_list(column_array, quote_columns=false) -%}
-    
+
     {%- if not quote_columns -%}
         {%- set column_list=column_array -%}
     {%- elif quote_columns -%}

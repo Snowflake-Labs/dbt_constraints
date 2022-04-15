@@ -3,7 +3,7 @@
     Simulate missing PK values
 */
 
-SELECT 
+SELECT
     CASE WHEN MOD(o_orderkey, 10) = 0 THEN o_orderkey ELSE NULL END AS o_orderkey,
     o_orderkey_seq,
     o_custkey,
@@ -14,5 +14,5 @@ SELECT
     o_clerk,
     o_shippriority,
     o_comment
-FROM 
+FROM
 {{ ref('dim_orders') }}

@@ -1,12 +1,12 @@
 # dbt Constraints Package
 
-This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake and PostgreSQL only. 
+This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake and PostgreSQL only.
 
 ## Why data engineers should add referential integrity constraints
 
 The primary reason to add constraints to your database tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys. This can both save time and avoid mistakes.
 
-In addition, although Snowflake doesn't enforce most constraints, the [query optimizer can consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints on Snowflake with the RELY property to improve query performance. 
+In addition, although Snowflake doesn't enforce most constraints, the [query optimizer can consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints on Snowflake with the RELY property to improve query performance.
 
 Many other databases including PostgreSQL, SQL Server, Oracle, MySQL, and DB2 can use referential integrity constraints to perform "[join elimination](https://blog.jooq.org/join-elimination-an-essential-optimiser-feature-for-advanced-sql-usage/)" to remove tables from an execution plan. This commonly occurs when you query a subset of columns from a view and some of the tables in the view are unnecessary. Even on databases that do not support join elimination, some [BI and visualization tools will also rewrite their queries](https://docs.snowflake.com/en/user-guide/table-considerations.html#referential-integrity-constraints) based on constraint information, producing the same effect.
 
@@ -89,10 +89,10 @@ packages:
 
 ```
 <ADAPTER_NAME>__create_primary_key(table_model, column_names, quote_columns=false)
-<ADAPTER_NAME>__create_unique_key(table_model, column_names, quote_columns=false) 
-<ADAPTER_NAME>__create_foreign_key(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns=false) 
-<ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names) 
-<ADAPTER_NAME>__foreign_key_exists(table_relation, column_names) 
+<ADAPTER_NAME>__create_unique_key(table_model, column_names, quote_columns=false)
+<ADAPTER_NAME>__create_foreign_key(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns=false)
+<ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names)
+<ADAPTER_NAME>__foreign_key_exists(table_relation, column_names)
 ```
 
 ## dbt_constraints Limitations

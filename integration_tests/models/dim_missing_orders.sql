@@ -4,8 +4,8 @@
 */
 
 SELECT *
-FROM 
+FROM
 {{ ref('dim_orders') }}
 
--- This line will cause a FK violation 
+-- This line will cause a FK violation
 WHERE MOD(o_orderkey, 2) = 0

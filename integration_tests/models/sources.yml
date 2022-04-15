@@ -75,7 +75,7 @@ sources:
               - not_null
           - name: c_name
             description: "Customer Name"
-            tests: 
+            tests:
               - not_null
           - name: c_nationkey
             tests:

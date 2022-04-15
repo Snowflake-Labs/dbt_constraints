@@ -1,8 +1,8 @@
 {#- Define three tests for PK, UK, and FK that can be overridden by DB implementations.
     These tests have overloaded parameter names to be as flexible as possible. -#}
 
-{%- test primary_key(model, 
-        column_name=none, column_names=[], 
+{%- test primary_key(model,
+        column_name=none, column_names=[],
         quote_columns=false) -%}
 
     {%- if column_names|count == 0 and column_name -%}
@@ -14,8 +14,8 @@
 {%- endtest -%}
 
 
-{%- test unique_key(model, 
-        column_name=none, column_names=[], 
+{%- test unique_key(model,
+        column_name=none, column_names=[],
         quote_columns=false) -%}
 
     {%- if column_names|count == 0 and column_name -%}
@@ -27,10 +27,10 @@
 {%- endtest -%}
 
 
-{%- test foreign_key(model, 
-        column_name=none, fk_column_name=none, fk_column_names=[], 
-        pk_table_name=none, to=none, 
-        pk_column_name=none, pk_column_names=[], field=none, 
+{%- test foreign_key(model,
+        column_name=none, fk_column_name=none, fk_column_names=[],
+        pk_table_name=none, to=none,
+        pk_column_name=none, pk_column_names=[], field=none,
         quote_columns=false) -%}
 
     {%- if pk_column_names|count == 0 and (pk_column_name or field) -%}
@@ -82,21 +82,21 @@
 
 
 {#- This macro should be added to on-run-end to create constraints
-    after all the models and tests have completed. You can pass a 
+    after all the models and tests have completed. You can pass a
     list of the tests that you want considered for constraints and
     a flag for whether columns should be quoted. The first macro
     primarily controls the order that constraints are created. -#}
 {%- macro create_constraints(
         constraint_types=[
-            'primary_key', 
-            'unique_key', 
-            'unique_combination_of_columns', 
-            'unique', 
-            'foreign_key', 
+            'primary_key',
+            'unique_key',
+            'unique_combination_of_columns',
+            'unique',
+            'foreign_key',
             'relationships'],
         quote_columns=false) -%}
     {%- if execute and var('dbt_constraints_enabled', false) -%}
-     
+
         {%- if 'primary_key' in constraint_types -%}
             {%- do dbt_constraints.create_constraints_by_type(['primary_key'], quote_columns) -%}
         {%- endif -%}
@@ -115,7 +115,7 @@
         {%- if 'relationships' in constraint_types -%}
             {%- do dbt_constraints.create_constraints_by_type(['relationships'], quote_columns) -%}
         {%- endif -%}
- 
+
     {%- endif -%}
 
 {%- endmacro -%}
@@ -128,10 +128,10 @@
 
     {#- Loop through the results and find all tests that passed and match the constraint_types -#}
     {%- for res in results
-        if res.status == "pass" 
-            and res.node.config.materialized == "test" 
+        if res.status == "pass"
+            and res.node.config.materialized == "test"
             and res.node.test_metadata.name is in( constraint_types ) -%}
-        
+
         {%- set test_model = res.node -%}
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
 
@@ -143,16 +143,16 @@
             | selectattr("unique_id", "in", test_model.depends_on.nodes)
             if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
 
-                {#- Append to our list of models for this test -#} 
+                {#- Append to our list of models for this test -#}
                 {%- do table_models.append(node) -%}
 
         {% endfor %}
 
         {#- We only create PK/UK if there is one model referenced by the test
             and if all the columns exist as physical columns on the table -#}
-        {%- if 1 == table_models|count 
+        {%- if 1 == table_models|count
             and test_model.test_metadata.name in("primary_key", "unique_key", "unique_combination_of_columns", "unique") -%}
-            
+
             {# Attempt to identify a parameter we can use for the column names #}
             {%- set column_names = [] -%}
             {%- if  test_parameters.column_names -%}
@@ -166,7 +166,7 @@
                 "`column_names` or `column_name` parameter missing for primary/unique key constraint on table: '" ~ table_models[0].name
                 ) }}
             {%- endif -%}
-            
+
             {%- set table_relation = adapter.get_relation(
                 database=table_models[0].database,
                 schema=table_models[0].schema,
@@ -182,10 +182,10 @@
             {%- endif -%}
 
         {#- We only create FK if there are two models referenced by the test
-            and if all the columns exist as physical columns on the tables -#} 
-        {%- elif 2 == table_models|count 
+            and if all the columns exist as physical columns on the tables -#}
+        {%- elif 2 == table_models|count
             and test_model.test_metadata.name in( "foreign_key", "relationships") -%}
-            
+
             {%- set fk_model_name = test_model.file_key_name |replace("models.", "") -%}
 
             {# Attempt to identify parameters we can use for the column names #}
@@ -201,7 +201,7 @@
                 "`pk_column_names`, `pk_column_name`, or `field` parameter missing for foreign key constraint on table: '" ~ fk_model_name ~ " " ~ test_parameters
                 ) }}
             {%- endif -%}
-            
+
             {%- set fk_column_names = [] -%}
             {%- if  test_parameters.fk_column_names -%}
                 {%- set fk_column_names = test_parameters.fk_column_names -%}
@@ -214,9 +214,9 @@
                 "`fk_column_names`, `fk_column_name`, or `column_name` parameter missing for foreign key constraint on table: '" ~ fk_model_name ~ " " ~ test_parameters
                 ) }}
             {%- endif -%}
-            
+
             {# The easiest way to identify which is the parent and child table is to compare the name to this constraint's file_key_name #}
-            
+
             {%- set fk_model = table_models | selectattr("name", "equalto", fk_model_name)|first -%}
             {%- set fk_table_relation = adapter.get_relation(
                 database=fk_model.database,
@@ -233,7 +233,7 @@
             {%- elif not dbt_constraints.table_columns_all_exist(fk_table_relation, fk_column_names) -%}
                 {%- do log("Skipping foreign key because a physical column was not found on the fk table: " ~ fk_column_names ~ " in " ~ fk_model.name, info=true) -%}
             {%- else  -%}
-                {%- do dbt_constraints.create_foreign_key(test_model, pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, quote_columns) -%} 
+                {%- do dbt_constraints.create_foreign_key(test_model, pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, quote_columns) -%}
             {%- endif -%}
 
         {%- endif -%}

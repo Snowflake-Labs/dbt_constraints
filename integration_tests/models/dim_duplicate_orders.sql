@@ -5,6 +5,6 @@
 
 SELECT O.*
 FROM {{ ref('dim_orders') }} O
-UNION ALL 
+UNION ALL
 SELECT O.*
 FROM {{ ref('dim_orders') }} O
