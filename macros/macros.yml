@@ -1,6 +1,7 @@
 version: 2
 
 macros:
+  # Primary macro
   - name: create_constraints
     description: Primary macro automatically called `on-run-end` to generate primary keys, unique keys, and foreign keys. The `dbt_constraints_enabled` variable can be set to `false` in your project to disable this macro.
     arguments:
@@ -10,8 +11,85 @@ macros:
       - name: quote_columns
         type: boolean
         description: Whether to wrap column names in double quotes. By default this is set to false.
-
     docs:
       show: true
 
+  # The following five macros must be implemented for the current adapter or dbt will halt
 
+  - name: create_primary_key
+    description: Calls the adapter-specific version of the macro to create a primary key
+    arguments:
+      - name: table_model
+        type: graph node
+        description: Accepts the graph node of the table that will have the constraint
+      - name: column_names
+        type: array of column names
+        description: An array of text column names to include in the constraint
+      - name: quote_columns
+        type: boolean
+        description: Whether to wrap column names in double quotes. By default this is set to false.
+    docs:
+      show: true
+
+  - name: create_unique_key
+    description: Calls the adapter-specific version of the macro to create a unique key
+    arguments:
+      - name: table_model
+        type: graph node
+        description: Accepts the graph node of the table that will have the constraint
+      - name: column_names
+        type: array of column names
+        description: An array of text column names to include in the constraint
+      - name: quote_columns
+        type: boolean
+        description: Whether to wrap column names in double quotes. By default this is set to false.
+    docs:
+      show: true
+
+  - name: create_foreign_key
+    description: Calls the adapter-specific version of the macro to create a foreign key
+    arguments:
+      - name: test_model
+        type: results node
+        description: Accepts the result node of the test related to this constraint
+      - name: pk_model
+        type: graph node
+        description: Accepts the graph node of the parent table that has a PK or UK
+      - name: column_names
+        type: array of column names
+        description: An array of text column names to include in the FK reference
+      - name: fk_model
+        type: graph node
+        description: Accepts the graph node of the table that will have the constraint
+      - name: fk_column_names
+        type: array of column names
+        description: An array of text column names to include in the constraint
+      - name: quote_columns
+        type: boolean
+        description: Whether to wrap column names in double quotes. By default this is set to false.
+    docs:
+      show: true
+
+  - name: unique_constraint_exists
+    description: Calls the adapter-specific version of the macro to check if a PK or UK already exists
+    arguments:
+      - name: table_relation
+        type: relation
+        description: Accepts the relation of the table to check
+      - name: column_names
+        type: array of column names
+        description: An array of text column names the constraint must contain
+    docs:
+      show: true
+
+  - name: foreign_key_exists
+    description: Calls the adapter-specific version of the macro to check if a foreign key already exists
+    arguments:
+      - name: table_relation
+        type: relation
+        description: Accepts the relation of the table to check
+      - name: column_names
+        type: array of column names
+        description: An array of text column names the constraint must contain
+    docs:
+      show: true
