@@ -74,7 +74,7 @@
     and to skip FK where no PK/UK constraint exists on the parent table -#}
 {%- macro snowflake__unique_constraint_exists(table_relation, column_names) -%}
     {%- set lookup_query -%}
-    SHOW UNIQUE KEYS IN TABLE {{table_relation}};
+    SHOW UNIQUE KEYS IN TABLE {{table_relation}}
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {%- set constraint_list = run_query(lookup_query) -%}
@@ -88,7 +88,7 @@
     {%- endif -%}#}
 
     {%- set lookup_query -%}
-    SHOW PRIMARY KEYS IN TABLE {{table_relation}};
+    SHOW PRIMARY KEYS IN TABLE {{table_relation}}
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {%- set constraint_list = run_query(lookup_query) -%}
@@ -111,7 +111,7 @@
 {#- This macro is used in create macros to avoid duplicate FK constraints -#}
 {%- macro snowflake__foreign_key_exists(table_relation, column_names) -%}
     {%- set lookup_query -%}
-    SHOW IMPORTED KEYS IN TABLE {{table_relation}};
+    SHOW IMPORTED KEYS IN TABLE {{table_relation}}
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {%- set constraint_list = run_query(lookup_query) -%}
