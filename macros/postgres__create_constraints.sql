@@ -6,11 +6,17 @@
     {#- Check that the table does not already have this PK/UK -#}
     {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
 
-        {%- set query -%}
-        ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} )
-        {%- endset -%}
-        {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
-        {%- do run_query(query) -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation) -%}
+
+            {%- set query -%}
+            ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} )
+            {%- endset -%}
+            {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
+            {%- do run_query(query) -%}
+
+        {%- else -%}
+            {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
+        {%- endif -%}
 
     {%- else -%}
         {%- do log("Skipping " ~ constraint_name ~ " because PK/UK already exists: " ~ table_relation ~ " " ~ column_names, info=false) -%}
@@ -28,11 +34,17 @@
     {#- Check that the table does not already have this PK/UK -#}
     {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
 
-        {%- set query -%}
-        ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} )
-        {%- endset -%}
-        {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
-        {%- do run_query(query) -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation) -%}
+
+            {%- set query -%}
+            ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} )
+            {%- endset -%}
+            {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
+            {%- do run_query(query) -%}
+
+        {%- else -%}
+            {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
+        {%- endif -%}
 
     {%- else -%}
         {%- do log("Skipping " ~ constraint_name ~ " because PK/UK already exists: " ~ table_relation ~ " " ~ column_names, info=false) -%}
@@ -52,11 +64,17 @@
         {#- Check if the table already has this foreign key -#}
         {%- if not dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names) -%}
 
-            {%- set query -%}
-            ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} )
-            {%- endset -%}
-            {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
-            {%- do run_query(query) -%}
+            {%- if dbt_constraints.have_ownership_priv(fk_table_relation) and dbt_constraints.have_references_priv(pk_table_relation) -%}
+
+                {%- set query -%}
+                ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} )
+                {%- endset -%}
+                {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
+                {%- do run_query(query) -%}
+
+            {%- else -%}
+                {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ fk_table_relation ~ " referencing " ~ pk_table_relation, info=true) -%}
+            {%- endif -%}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because FK already exists: " ~ fk_table_relation ~ " " ~ fk_column_names, info=false) -%}
@@ -136,3 +154,38 @@
     {{ return(false) }}
 {%- endmacro -%}
 
+
+{%- macro postgres__have_references_priv(table_relation) -%}
+    {%- set lookup_query -%}
+    select case when count(*) > 0 then 'y' else 'n' end as "have_references"
+    from information_schema.table_privileges t
+    join information_schema.enabled_roles er on t.grantee = er.role_name
+    where t.table_schema = '{{table_relation.schema}}'
+        and t.table_name = '{{table_relation.identifier}}'
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {%- set results = run_query(lookup_query) -%}
+    {%- if "y" in( results.columns["have_references"].values() ) -%}
+        {{ return(true) }}
+    {%- endif -%}
+
+    {{ return(false) }}
+{%- endmacro -%}
+
+
+{%- macro postgres__have_ownership_priv(table_relation) -%}
+    {%- set lookup_query -%}
+    select case when count(*) > 0 then 'y' else 'n' end as "have_ownership"
+    from pg_catalog.pg_tables t
+    join information_schema.enabled_roles er on t.tableowner = er.role_name
+    where t.schemaname = '{{table_relation.schema}}'
+    and t.tablename = '{{table_relation.identifier}}'
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {%- set results = run_query(lookup_query) -%}
+    {%- if "y" in( results.columns["have_ownership"].values() ) -%}
+        {{ return(true) }}
+    {%- endif -%}
+
+    {{ return(false) }}
+{%- endmacro -%}

@@ -48,8 +48,7 @@
 
 
 
-{#- Define three create macros for PK, UK, and FK that
-    can be overridden by DB implementations -#}
+{#- Define three create macros for PK, UK, and FK that can be overridden by DB implementations -#}
 
 {%- macro create_primary_key(table_model, column_names, quote_columns=false) -%}
     {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, quote_columns)) }}
@@ -67,8 +66,7 @@
 
 
 
-{#- Define two macros for detecting if PK, UK, and FK exist that
-    can be overridden by DB implementations -#}
+{#- Define two macros for detecting if PK, UK, and FK exist that can be overridden by DB implementations -#}
 
 {%- macro unique_constraint_exists(table_relation, column_names) -%}
     {{ return(adapter.dispatch('unique_constraint_exists', 'dbt_constraints')(table_relation, column_names) ) }}
@@ -78,6 +76,16 @@
     {{ return(adapter.dispatch('foreign_key_exists', 'dbt_constraints')(table_relation, column_names)) }}
 {%- endmacro -%}
 
+
+{#- Define two macros for detecting if we have sufficient privileges that can be overridden by DB implementations -#}
+
+{%- macro have_references_priv(table_relation) -%}
+    {{ return(adapter.dispatch('have_references_priv', 'dbt_constraints')(table_relation) ) }}
+{%- endmacro -%}
+
+{%- macro have_ownership_priv(table_relation) -%}
+    {{ return(adapter.dispatch('have_ownership_priv', 'dbt_constraints')(table_relation)) }}
+{%- endmacro -%}
 
 
 
@@ -139,9 +147,9 @@
             These models must be physical tables and cannot be sources -#}
         {%- set table_models = [] -%}
         {%- for node in graph.nodes.values()
-            | selectattr("resource_type", "equalto", "model")
+            | selectattr("resource_type", "in", ("model", "source") )
             | selectattr("unique_id", "in", test_model.depends_on.nodes)
-            if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
+            if not node.config.materialized in( ("view", "ephemeral") ) -%}
 
                 {#- Append to our list of models for this test -#}
                 {%- do table_models.append(node) -%}
