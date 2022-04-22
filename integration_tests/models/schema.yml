@@ -195,6 +195,15 @@ models:
 
   - name: dim_part_supplier
     description: "Multi column UK"
+    columns:
+      - name: ps_suppkey
+        description: "Part of compound primary key for this table"
+        tests:
+          - not_null
+          # Testing FK to a source
+          - relationships:
+              to: source('tpc_h', 'supplier')
+              field: s_suppkey
     tests:
       - dbt_constraints.unique_key:
           column_names:
