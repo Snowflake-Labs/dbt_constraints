@@ -15,7 +15,7 @@
             {%- do run_query(query) -%}
 
         {%- else -%}
-            {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
+            {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
         {%- endif -%}
 
     {%- else -%}
@@ -44,7 +44,7 @@
             {%- do run_query(query) -%}
 
         {%- else -%}
-            {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
+            {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
         {%- endif -%}
 
     {%- else -%}
