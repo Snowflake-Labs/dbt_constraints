@@ -1,5 +1,13 @@
 {#- Test if the primary key is valid -#}
 {%- macro default__test_primary_key(model, column_names, quote_columns=false) -%}
+{#
+NOTE: This test is designed to implement the "primary key" as specified in ANSI SQL 92 which states the following:
+   "A unique constraint is satisfied if and only if no two rows in
+    a table have the same non-null values in the unique columns. In
+    addition, if the unique constraint was defined with PRIMARY KEY,
+    then it requires that none of the values in the specified column or
+    columns be the null value."
+#}
 
 {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) %}
 
@@ -24,6 +32,11 @@ from validation_errors
 
 {#- Test if the unique key is valid -#}
 {%- macro default__test_unique_key(model, column_names, quote_columns=false) -%}
+{#
+NOTE: This test is designed to implement the "unique constraint" as specified in ANSI SQL 92 which states the following:
+   "A unique constraint is satisfied if and only if no two rows in
+    a table have the same non-null values in the unique columns."
+#}
 
 {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) %}
 
@@ -45,6 +58,23 @@ from validation_errors
 
 {#- Test if the foreign key is valid -#}
 {%- macro default__test_foreign_key(model, fk_column_names, pk_table_name, pk_column_names, quote_columns=false) -%}
+{#
+NOTE: This test is designed to implement the "referential constraint" as specified in ANSI SQL 92 which states the following:
+   "A referential constraint is satisfied if one of the following con-
+    ditions is true, depending on the <match option> specified in the
+    <referential constraint definition>:
+
+    -  If no <match type> was specified then, for each row R1 of the
+        referencing table, either at least one of the values of the
+        referencing columns in R1 shall be a null value, or the value of
+        each referencing column in R1 shall be equal to the value of the
+        corresponding referenced column in some row of the referenced
+        table."
+
+The implications of this standard is that if one column is NULL in a compound foreign key, the other column
+does NOT need to match a row in a referenced unique key. This is implemented by first excluding any
+rows from the test that have a NULL value in any of the columns.
+#}
 
 {%- set fk_columns_list=dbt_constraints.get_quoted_column_list(fk_column_names, quote_columns) %}
 {%- set pk_columns_list=dbt_constraints.get_quoted_column_list(pk_column_names, quote_columns) %}
