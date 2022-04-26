@@ -18,11 +18,21 @@ When you add this package, dbt will automatically begin to create unique keys fo
 
 ### Disabling automatic constraint generation
 
-The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation.
+The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation. By default dbt Constraints only creates constraints on models. To allow constraints on sources, you can set `dbt_constraints_sources_enabled` to `true`. The package will verify that you have sufficient database privileges to create constraints on sources.
 
 ```yml
 vars:
-  dbt_constraints_enabled: false
+  # The package can be temporarily disabled using this variable
+  dbt_constraints_enabled: true
+
+  # The package can also add constraints on sources if you have sufficient privileges
+  dbt_constraints_sources_enabled: false
+
+  # You can also be specific on which constraints are enabled for sources
+  # You must also enable dbt_constraints_sources_enabled above
+  dbt_constraints_sources_pk_enabled: true
+  dbt_constraints_sources_uk_enabled: true
+  dbt_constraints_sources_fk_enabled: true
 ```
 
 ## Installation
@@ -85,23 +95,25 @@ packages:
 
 * The package's macros depend on the results and graph object schemas of dbt >=1.0.0
 
-* The package currently only includes macros for creating constraints in Snowflake and PostgreSQL. To add support for other databases, it is necessary to implement the following five macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the snowflake__create_constraints.sql and postgres__create_constraints.sql files as examples.
+* The package currently only includes macros for creating constraints in Snowflake and PostgreSQL. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the snowflake__create_constraints.sql and postgres__create_constraints.sql files as examples.
 
 ```
-<ADAPTER_NAME>__create_primary_key(table_model, column_names, quote_columns=false)
-<ADAPTER_NAME>__create_unique_key(table_model, column_names, quote_columns=false)
-<ADAPTER_NAME>__create_foreign_key(test_model, pk_model, pk_column_names, fk_model, fk_column_names, quote_columns=false)
+<ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false)
+<ADAPTER_NAME>__create_unique_key(table_model, column_names, verify_permissions, quote_columns=false)
+<ADAPTER_NAME>__create_foreign_key(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false)
 <ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names)
 <ADAPTER_NAME>__foreign_key_exists(table_relation, column_names)
+<ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions)
+<ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions)
 ```
 
 ## dbt_constraints Limitations
 
 Generally, if you don't meet a requirement, tests are still executed but the constraint is skipped rather than producing an error.
 
-- All models involved in a constraint must be materialized as table, incremental, or snapshot
+- All models involved in a constraint must be materialized as table, incremental, or snapshot.
 
-- Constraints will not be created on sources, only models. You can use the PK/UK/FK tests with sources but constraints won't be generated.
+-  If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key.
 
 - All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 
