@@ -37,11 +37,15 @@ vars:
 
 ## Installation
 
-1. Add this package to your `packages.yml` following [these instructions](https://docs.getdbt.com/docs/building-a-dbt-project/package-management/). If you are comfortable with testing the very latest code, the following code will pull the very latest version of the package.
+1. Add this package to your `packages.yml` following [these instructions](https://docs.getdbt.com/docs/building-a-dbt-project/package-management/). Please check [this link for the latest released version](https://github.com/Snowflake-Labs/dbt_constraints/releases/latest).
 ```yml
 packages:
-  - git: "https://github.com/danflippo/dbt_constraints.git"
-    revision: main
+  - package: Snowflake-Labs/dbt_constraints
+    version: [">=0.3.0", "<0.4.0"]
+# <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag. 
+# You can also pull the latest changes from Github with the following:
+#  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
+#    revision: main
 ```
 
 2. Run `dbt deps`.
