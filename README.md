@@ -127,7 +127,7 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 
 - Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
 
-- The order of columns on a foreign key test must match betweek the FK columnns and PK columns
+- The order of columns on a foreign key test must match between the FK columns and PK columns
 
 - The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model.
 
