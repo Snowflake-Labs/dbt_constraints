@@ -66,6 +66,14 @@ models:
         tests:
           - unique
           - not_null
+      - name: o_orderkey_seq
+        description: "Sequence key based on orderkey"
+        tests:
+          # We are adding a where config to test that the constraint is skipped
+          - unique:
+              config:
+                where: "1 = 1"
+          - not_null
       - name: o_custkey
         tests:
           - not_null
