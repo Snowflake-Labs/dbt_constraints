@@ -4,5 +4,5 @@
 
 SELECT
   lineitem.*,
-  coalesce(l_orderkey::varchar, '') || '~' || coalesce(l_linenumber::varchar, '') AS integration_id
+  coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '') AS integration_id
 FROM {{ source('tpc_h', 'lineitem') }} lineitem

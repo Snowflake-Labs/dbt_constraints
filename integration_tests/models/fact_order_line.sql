@@ -11,8 +11,8 @@
 
 SELECT
   lineitem.*,
-  TO_CHAR(o_orderdate, 'YYYYMMDD')::INTEGER AS o_orderdate_key,
-  coalesce(l_orderkey::varchar, '') || '~' || coalesce(l_linenumber::varchar, '') AS integration_id
+  cast(TO_CHAR(o_orderdate, 'YYYYMMDD') AS NUMBER(10,0)) AS o_orderdate_key,
+  coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '') AS integration_id
 FROM {{ source('tpc_h', 'lineitem') }} lineitem
 JOIN {{ source('tpc_h', 'orders') }} orders ON l_orderkey = o_orderkey
 

@@ -39,7 +39,7 @@ sources:
                 - "ps_suppkey"
           # How to validate a compound primary key natively
           - unique:
-              column_name: "coalesce(ps_partkey::varchar, '') || '~' || coalesce(ps_suppkey::varchar, '')"
+              column_name: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
 
       - name: "supplier"
         columns:
@@ -63,7 +63,7 @@ sources:
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'CUSTOMER')
+                  to: source('tpc_h', 'customer')
                   field: c_custkey
 
       - name: customer
@@ -100,10 +100,10 @@ sources:
                 - l_linenumber
           # How to validate a compound primary key natively
           - unique:
-              column_name: "coalesce(l_orderkey::varchar, '') || '~' || coalesce(l_linenumber::varchar, '')"
+              column_name: "coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '')"
 
           # How to validate a compound foreign key
           - relationships:
-              column_name: "coalesce(l_partkey::varchar, '') || '~' || coalesce(l_suppkey::varchar, '')"
+              column_name: "coalesce(cast(l_partkey as varchar(100)), '') || '~' || coalesce(cast(l_suppkey as varchar(100)), '')"
               to: source('tpc_h', 'partsupp')
-              field: "coalesce(ps_partkey::varchar, '') || '~' || coalesce(ps_suppkey::varchar, '')"
+              field: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
