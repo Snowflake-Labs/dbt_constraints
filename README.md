@@ -42,7 +42,7 @@ vars:
 packages:
   - package: Snowflake-Labs/dbt_constraints
     version: [">=0.3.0", "<0.4.0"]
-# <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag. 
+# <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag.
 # You can also pull the latest changes from Github with the following:
 #  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
 #    revision: main
@@ -130,6 +130,8 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 - The order of columns on a foreign key test must match between the FK columns and PK columns
 
 - The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model.
+
+- Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints.
 
 ## Maintainers
 
