@@ -63,7 +63,7 @@ sources:
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'CUSTOMER')
+                  to: source('tpc_h', 'customer')
                   field: c_custkey
 
       - name: customer

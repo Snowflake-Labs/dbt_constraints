@@ -25,6 +25,9 @@ models:
           column_name: p_partkey
 
   - name: dim_customers
+    # Test support for alias
+    config:
+      alias: dim_customer
     description: "Customer dimension"
     columns:
       - name: c_custkey

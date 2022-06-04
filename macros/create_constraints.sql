@@ -171,6 +171,7 @@
                 | selectattr("resource_type", "equalto", "source")
                 | selectattr("unique_id", "in", test_model.depends_on.nodes) -%}
 
+                    {%- do node.update({'alias': node.alias or node.name }) -%}
                     {#- Append to our list of models for this test -#}
                     {%- do table_models.append(node) -%}
                     {#- If we are using a sources, we will need to verify permissions -#}
@@ -202,7 +203,7 @@
             {%- set table_relation = adapter.get_relation(
                 database=table_models[0].database,
                 schema=table_models[0].schema,
-                identifier=table_models[0].name) -%}
+                identifier=table_models[0].alias ) -%}
             {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names) -%}
                 {%- if test_model.test_metadata.name == "primary_key" -%}
                     {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
@@ -242,12 +243,12 @@
                 {%- set fk_table_relation = adapter.get_relation(
                     database=fk_model.database,
                     schema=fk_model.schema,
-                    identifier=fk_model.name) -%}
+                    identifier=fk_model.alias) -%}
 
                 {%- set pk_table_relation = adapter.get_relation(
                     database=pk_model.database,
                     schema=pk_model.schema,
-                    identifier=pk_model.name) -%}
+                    identifier=pk_model.alias) -%}
 
                 {# Attempt to identify parameters we can use for the column names #}
                 {%- set pk_column_names = [] -%}
