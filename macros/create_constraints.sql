@@ -141,6 +141,7 @@
     {%- for res in results
         if res.status == "pass"
             and res.node.config.materialized == "test"
+            and res.node.test_metadata
             and res.node.test_metadata.name is in( constraint_types )
             and res.node.config.where is none -%}
 
