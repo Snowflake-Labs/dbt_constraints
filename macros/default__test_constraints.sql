@@ -86,7 +86,7 @@ rows from the test that have a NULL value in any of the columns.
 {%- endfor -%}
 
 {#- This test will return if all the columns are not null
-    and the values are not found in the referenced PK table -#}
+    and the values are not found in the referenced PK table #}
 with child as (
   select
     {{fk_columns_csv}}
