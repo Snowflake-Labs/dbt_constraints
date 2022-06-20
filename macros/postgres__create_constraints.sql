@@ -13,6 +13,7 @@
             {%- endset -%}
             {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
             {%- do run_query(query) -%}
+            {{ adapter.commit() }}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
@@ -41,6 +42,7 @@
             {%- endset -%}
             {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
             {%- do run_query(query) -%}
+            {{ adapter.commit() }}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
@@ -71,6 +73,7 @@
                 {%- endset -%}
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
                 {%- do run_query(query) -%}
+                {{ adapter.commit() }}
 
             {%- else -%}
                 {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ fk_table_relation ~ " referencing " ~ pk_table_relation, info=true) -%}
