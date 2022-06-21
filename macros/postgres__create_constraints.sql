@@ -214,6 +214,7 @@
     from information_schema.table_constraints
     where table_schema = '{{relation.schema}}'
     and table_name='{{relation.identifier}}'
+    and constraint_type in ('FOREIGN KEY', 'PRIMARY KEY', 'UNIQUE')
     {%- endset -%}
     {%- set constraint_list = run_query(lookup_query) -%}
 
