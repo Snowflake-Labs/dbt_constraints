@@ -20,6 +20,6 @@ JOIN {{ source('tpc_h', 'orders') }} orders ON l_orderkey = o_orderkey
 
  -- this filter will only be applied on an incremental run
 WHERE l_orderkey >=
-      ( SELECT NVL(MAX(l_orderkey), -1) FROM {{ this }} )
+      ( SELECT coalesce(MAX(l_orderkey), -1) FROM {{ this }} )
 
 {% endif -%}

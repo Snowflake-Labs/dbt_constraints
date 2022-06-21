@@ -13,6 +13,7 @@
             {%- endset -%}
             {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
             {%- do run_query(query) -%}
+            {{ adapter.commit() }}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
@@ -41,6 +42,7 @@
             {%- endset -%}
             {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
             {%- do run_query(query) -%}
+            {{ adapter.commit() }}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
@@ -67,10 +69,11 @@
             {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions) -%}
 
                 {%- set query -%}
-                ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} )
+                ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} ) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
                 {%- endset -%}
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
                 {%- do run_query(query) -%}
+                {{ adapter.commit() }}
 
             {%- else -%}
                 {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ fk_table_relation ~ " referencing " ~ pk_table_relation, info=true) -%}
@@ -199,3 +202,29 @@
         {{ return(true) }}
     {%- endif -%}
 {%- endmacro -%}
+
+
+
+
+{#- PostgreSQL will error if you try to truncate tables with FK constraints or tables with PK/UK constraints
+    referenced by FK so we will drop all constraints before truncating tables -#}
+{% macro postgres__truncate_relation(relation) -%}
+    {%- set lookup_query -%}
+    select constraint_name
+    from information_schema.table_constraints
+    where table_schema = '{{relation.schema}}'
+    and table_name='{{relation.identifier}}'
+    and constraint_type in ('FOREIGN KEY', 'PRIMARY KEY', 'UNIQUE')
+    {%- endset -%}
+    {%- set constraint_list = run_query(lookup_query) -%}
+
+    {%- for constraint_name in constraint_list.columns["constraint_name"].values() -%}
+        {%- set drop_statement -%}
+        ALTER TABLE {{relation}} DROP CONSTRAINT "{{constraint_name}}" CASCADE
+        {%- endset -%}
+        {%- do log("Dropping constraint: " ~ constraint_name ~ " from table " ~ relation, info=false) -%}
+        {%- do run_query(drop_statement) -%}
+    {% endfor %}
+
+    {{ return(adapter.dispatch('truncate_relation', 'dbt')(relation)) }}
+{% endmacro %}

@@ -89,6 +89,15 @@
 
 
 
+{#- Override dbt's truncate_relation macro to allow us to create adapter specific versions that drop constraints -#}
+
+{% macro truncate_relation(relation) -%}
+  {{ return(adapter.dispatch('truncate_relation')(relation)) }}
+{% endmacro %}
+
+
+
+
 {#- This macro should be added to on-run-end to create constraints
     after all the models and tests have completed. You can pass a
     list of the tests that you want considered for constraints and
@@ -329,4 +338,8 @@
     {%- else -%}
         {{ return(false) }}
     {%- endif -%}
+{%- endmacro -%}
+
+
+{%- macro drop_constraints() -%}
 {%- endmacro -%}

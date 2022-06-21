@@ -80,10 +80,14 @@ rows from the test that have a NULL value in any of the columns.
 {%- set pk_columns_list=dbt_constraints.get_quoted_column_list(pk_column_names, quote_columns) %}
 {%- set fk_columns_csv=dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) %}
 {%- set pk_columns_csv=dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) %}
+{%- set join_conditions = [] -%}
+{%- for x in range(fk_columns_list|count) -%}
+    {%- set join_conditions = join_conditions.append( 'parent.' ~ pk_columns_list[x] ~ ' = child.' ~ fk_columns_list[x] ) -%}
+{%- endfor -%}
 
 {#- This test will return if all the columns are not null
-    and the values are not found in the referenced PK table -#}
-with fk_table as (
+    and the values are not found in the referenced PK table #}
+with child as (
   select
     {{fk_columns_csv}}
   from {{model}}
@@ -93,26 +97,22 @@ with fk_table as (
         {% endfor %}
 ),
 
-pk_table as (
+parent as (
     select
         {{pk_columns_csv}}
     from {{pk_table_name}}
-    where 1=1
-        {% for column in pk_columns_list -%}
-        and {{column}} is not null
-        {% endfor %}
 ),
 
 validation_errors as (
     select
-        {{fk_columns_csv}}
-    from fk_table
-    where ( {{fk_columns_csv}} )
-        not in (
-            select {{pk_columns_csv}}
-            from pk_table
-        )
+        child.*
+    from child
+    left join parent
+        on {{join_conditions | join(' and ')}}
+
+    where parent.{{pk_columns_list | first}} is null
 )
+
 select *
 from validation_errors
 
