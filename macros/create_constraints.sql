@@ -210,7 +210,7 @@
                 ) }}
             {%- endif -%}
 
-            {%- set table_relation = adapter.get_relation(
+            {%- set table_relation = api.Relation.create(
                 database=table_models[0].database,
                 schema=table_models[0].schema,
                 identifier=table_models[0].alias ) -%}
@@ -250,12 +250,12 @@
 
             {%- if fk_model and pk_model -%}
 
-                {%- set fk_table_relation = adapter.get_relation(
+                {%- set fk_table_relation = api.Relation.create(
                     database=fk_model.database,
                     schema=fk_model.schema,
                     identifier=fk_model.alias) -%}
 
-                {%- set pk_table_relation = adapter.get_relation(
+                {%- set pk_table_relation = api.Relation.create(
                     database=pk_model.database,
                     schema=pk_model.schema,
                     identifier=pk_model.alias) -%}

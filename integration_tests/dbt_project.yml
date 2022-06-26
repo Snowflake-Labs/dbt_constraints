@@ -45,3 +45,6 @@ vars:
 
 models:
   +materialized: table
+
+seeds:
+  +quote_columns: false
