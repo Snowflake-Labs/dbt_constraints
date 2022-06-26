@@ -1,6 +1,6 @@
 # dbt Constraints Package
 
-This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake and PostgreSQL only.
+This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, and Oracle only.
 
 ## Why data engineers should add referential integrity constraints
 
@@ -8,9 +8,9 @@ The primary reason to add constraints to your database tables is that many tools
 
 In addition, although Snowflake doesn't enforce most constraints, the [query optimizer can consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints on Snowflake with the RELY property to improve query performance.
 
-Many other databases including PostgreSQL, SQL Server, Oracle, MySQL, and DB2 can use referential integrity constraints to perform "[join elimination](https://blog.jooq.org/join-elimination-an-essential-optimiser-feature-for-advanced-sql-usage/)" to remove tables from an execution plan. This commonly occurs when you query a subset of columns from a view and some of the tables in the view are unnecessary. Even on databases that do not support join elimination, some [BI and visualization tools will also rewrite their queries](https://docs.snowflake.com/en/user-guide/table-considerations.html#referential-integrity-constraints) based on constraint information, producing the same effect.
+Many other databases including PostgreSQL, Oracle, SQL Server, MySQL, and DB2 can use referential integrity constraints to perform "[join elimination](https://blog.jooq.org/join-elimination-an-essential-optimiser-feature-for-advanced-sql-usage/)" to remove tables from an execution plan. This commonly occurs when you query a subset of columns from a view and some of the tables in the view are unnecessary. Even on databases that do not support join elimination, some [BI and visualization tools will also rewrite their queries](https://docs.snowflake.com/en/user-guide/table-considerations.html#referential-integrity-constraints) based on constraint information, producing the same effect.
 
-Finally, although most columnar databases including Snowflake do not use or need indexes, most row-oriented databases including PostgreSQL require indexes on their primary key columns in order to perform efficient joins between tables. Typically a primary key or unique key constraint is enforced on such databases using such indexes. Having dbt create the unique indexes automatically can slightly reduce the degree of performance tuning necessary for row-oriented databases. Row-oriented databases frequently also need indexes on foreign key columns but [that is something best added manually](https://docs.getdbt.com/reference/resource-configs/postgres-configs#indexes).
+Finally, although most columnar databases including Snowflake do not use or need indexes, most row-oriented databases including PostgreSQL and Oracle require indexes on their primary key columns in order to perform efficient joins between tables. Typically a primary key or unique key constraint is enforced on such databases using such indexes. Having dbt create the unique indexes automatically can slightly reduce the degree of performance tuning necessary for row-oriented databases. Row-oriented databases frequently also need indexes on foreign key columns but [that is something best added manually](https://docs.getdbt.com/reference/resource-configs/postgres-configs#indexes).
 
 ## Please note
 
@@ -41,7 +41,7 @@ vars:
 ```yml
 packages:
   - package: Snowflake-Labs/dbt_constraints
-    version: [">=0.3.0", "<0.4.0"]
+    version: [">=0.4.0", "<0.5.0"]
 # <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag.
 # You can also pull the latest changes from Github with the following:
 #  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
@@ -99,7 +99,7 @@ packages:
 
 * The package's macros depend on the results and graph object schemas of dbt >=1.0.0
 
-* The package currently only includes macros for creating constraints in Snowflake and PostgreSQL. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the snowflake__create_constraints.sql and postgres__create_constraints.sql files as examples.
+* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql and postgres__create_constraints.sql files as examples.
 
 ```
 <ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false)
@@ -117,7 +117,7 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 
 - All models involved in a constraint must be materialized as table, incremental, or snapshot.
 
--  If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key.
+-  If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
 
 - All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 
