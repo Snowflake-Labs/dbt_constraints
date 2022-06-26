@@ -1,7 +1,0 @@
-version: 2
-
-seeds:
-  - name: tpc_h_seeds
-    config:
-      enabled: true
-      full_refresh: false

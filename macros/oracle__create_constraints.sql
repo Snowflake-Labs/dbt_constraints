@@ -10,7 +10,7 @@
 
             {%- set query -%}
 BEGIN
-    EXECUTE IMMEDIATE 'ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} ) {{var('dbt_constraints_pk_constraint_settings', '')}}';
+    EXECUTE IMMEDIATE 'ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} )';
 EXCEPTION
     WHEN OTHERS THEN
         DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
@@ -44,7 +44,7 @@ END;
 
             {%- set query -%}
 BEGIN
-    EXECUTE IMMEDIATE 'ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} ) {{var('dbt_constraints_uk_constraint_properties', '')}}';
+    EXECUTE IMMEDIATE 'ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} )';
 EXCEPTION
     WHEN OTHERS THEN
         DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
@@ -80,7 +80,7 @@ END;
 
                 {%- set query -%}
 BEGIN
-    EXECUTE IMMEDIATE 'ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} ) {{var('dbt_constraints_fk_constraint_properties', '')}}';
+    EXECUTE IMMEDIATE 'ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} )';
 EXCEPTION
     WHEN OTHERS THEN
         DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
