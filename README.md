@@ -99,7 +99,7 @@ packages:
 
 * The package's macros depend on the results and graph object schemas of dbt >=1.0.0
 
-* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql and postgres__create_constraints.sql files as examples.
+* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
 
 ```
 <ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false)
