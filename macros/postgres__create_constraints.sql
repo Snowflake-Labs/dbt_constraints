@@ -1,16 +1,13 @@
 {# PostgreSQL specific implementation to create a primary key #}
-{%- macro postgres__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}    
+{%- macro postgres__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+    {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
 
-    {% set constraint_name_query %}
-        select  {{ dbt_utils.hash( dbt_utils.string_literal( table_relation.identifier ~ "_" ~ column_names|join('_') ) )  }}
-    {%endset%}
-    
-    {% set results = run_query(constraint_name_query) %}
-    
-    {% if execute %}
-        {% set constraint_name = "PK_" ~ results.columns[0].values()[0] %}
-    {% else %}
-        {% set constraint_name = "" %}
+    {%- if constraint_name|length > 63 %}
+        {%- set constraint_name_query %}
+        select  'PK_' || md5( '{{ constraint_name }}' )::varchar as "constraint_name"
+        {%- endset -%}
+        {%- set results = run_query(constraint_name_query) -%}
+        {%- set constraint_name = results.columns[0].values()[0] -%}
     {% endif %}
 
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
@@ -40,20 +37,16 @@
 
 
 {# PostgreSQL specific implementation to create a unique key #}
-{%- macro postgres__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}   
+{%- macro postgres__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+    {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
 
-    {%- set constraint_name_query %}
-        select  {{ dbt_utils.hash( dbt_utils.string_literal( table_relation.identifier ~ "_" ~ column_names|join('_') ) ) }}
-    {%endset%}   
-
-    {% set results = run_query(constraint_name_query) %}
-    
-    {% if execute %}
-        {% set constraint_name = "UK_" ~ results.columns[0].values()[0] %}
-    {% else %}
-        {% set constraint_name = "" %}
+    {%- if constraint_name|length > 63 %}
+        {%- set constraint_name_query %}
+        select  'UK_' || md5( '{{ constraint_name }}' )::varchar as "constraint_name"
+        {%- endset -%}
+        {%- set results = run_query(constraint_name_query) -%}
+        {%- set constraint_name = results.columns[0].values()[0] -%}
     {% endif %}
-
 
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
@@ -83,17 +76,14 @@
 
 {# PostgreSQL specific implementation to create a foreign key #}
 {%- macro postgres__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true) -%}
-    
-    {%- set constraint_name_query %}
-        select  {{ dbt_utils.hash( dbt_utils.string_literal( fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ) ) }}
-    {%endset%}
-    
-    {% set results = run_query(constraint_name_query) %}
-    
-    {% if execute %}
-        {% set constraint_name = "FK_" ~ results.columns[0].values()[0] %}
-    {% else %}
-        {% set constraint_name = "" %}
+    {%- set constraint_name = (fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
+
+    {%- if constraint_name|length > 63 %}
+        {%- set constraint_name_query %}
+        select  'FK_' || md5( '{{ constraint_name }}' )::varchar as "constraint_name"
+        {%- endset -%}
+        {%- set results = run_query(constraint_name_query) -%}
+        {%- set constraint_name = results.columns[0].values()[0] -%}
     {% endif %}
 
     {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
