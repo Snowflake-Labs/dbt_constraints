@@ -223,3 +223,35 @@ models:
 
   - name: dim_part_supplier_missing_con
     description: "Table is missing constraints to test FK won't be generated to it"
+
+  - name: fact_order_line_longcol
+    description: "Fact Order Lines with long column names"
+    columns:
+      - name: l_____________________orderkey
+        description: "FK to dim_orders and first key in PK"
+        tests:
+          - relationships:
+              to: ref('dim_orders')
+              field: o_orderkey
+      - name: l___________________linenumber
+        description: "Order Line Number and second key in PK"
+      - name: l_______________integration_id
+        description: "Concatenation of PK colums for the unique and not_null tests"
+        tests:
+          - unique
+          - not_null
+    tests:
+      # Demonstration that the primary_key test can accept multiple columns
+      - dbt_constraints.primary_key:
+          column_names:
+            - l_____________________orderkey
+            - l___________________linenumber
+      # Test multi-column FK
+      - dbt_constraints.foreign_key:
+          fk_column_names:
+            - l______________________partkey
+            - l______________________suppkey
+          pk_table_name: ref('dim_part_supplier')
+          pk_column_names:
+            - ps_partkey
+            - ps_suppkey
