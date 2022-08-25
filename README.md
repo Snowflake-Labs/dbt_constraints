@@ -135,7 +135,7 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 
 ## Maintainers
 
-- Dan Flippo ([@danflippo](https://github.com/danflippo))
+- Dan Flippo ([@sfc-gh-dflippo](https://github.com/sfc-gh-dflippo))
 
 This is a community-developed package, not an official Snowflake offering. It comes with no support or warranty. However, feel free to raise a github issue if you find a bug or would like a new feature.
 
