@@ -65,6 +65,11 @@
 {%- endmacro -%}
 
 
+{%- macro create_not_null(table_model, column_names, verify_permissions, quote_columns=false) -%}
+    {%- do log("Found not null test for " ~ table_model.name ~ ", column: " ~ dbt_constraints.get_quoted_column_csv(column_names, quote_columns), info=true) -%}
+    {# {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns)) }} #}
+{%- endmacro -%}
+
 
 {#- Define two macros for detecting if PK, UK, and FK exist that can be overridden by DB implementations -#}
 
@@ -110,7 +115,8 @@
             'unique_combination_of_columns',
             'unique',
             'foreign_key',
-            'relationships'],
+            'relationships',
+            'not_null'],
         quote_columns=false) -%}
     {%- if execute and var('dbt_constraints_enabled', false) -%}
         {%- do log("Running dbt Constraints", info=true) -%}
@@ -132,6 +138,9 @@
         {%- endif -%}
         {%- if 'relationships' in constraint_types -%}
             {%- do dbt_constraints.create_constraints_by_type(['relationships'], quote_columns) -%}
+        {%- endif -%}
+        {%- if 'not_null' in constraint_types -%}
+            {%- do dbt_constraints.create_constraints_by_type(['not_null'], quote_columns) -%}
         {%- endif -%}
 
         {%- do log("Finished dbt Constraints", info=true) -%}
@@ -297,6 +306,37 @@
             {%- else  -%}
                 {%- do log("Skipping foreign key because a we couldn't find the child table: model=" ~ fk_model_names ~ " or source=" ~ fk_source_names, info=true) -%}
             {%- endif -%}
+        
+        {#- We only create NN if there is one model referenced by the test
+            and if all the columns exist as physical columns on the table -#}
+        {%- elif 1 == table_models|count
+            and test_model.test_metadata.name in("not_null") -%}
+
+            {# Attempt to identify a parameter we can use for the column names #}
+            {%- set column_names = [] -%}
+            {%- if  test_parameters.column_names -%}
+                {%- set column_names =  test_parameters.column_names -%}
+            {%- elif  test_parameters.combination_of_columns -%}
+                {%- set column_names =  test_parameters.combination_of_columns -%}
+            {%- elif  test_parameters.column_name -%}
+                {%- set column_names =  [test_parameters.column_name] -%}
+            {%- else  -%}
+                {{ exceptions.raise_compiler_error(
+                "`column_names` or `column_name` parameter missing for not null constraint on table: '" ~ table_models[0].name
+                ) }}
+            {%- endif -%}
+
+            {%- set table_relation = api.Relation.create(
+                database=table_models[0].database,
+                schema=table_models[0].schema,
+                identifier=table_models[0].alias ) -%}
+
+            {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names) -%}
+                {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
+            {%- else  -%}
+                {%- do log("Skipping not null constraint because a physical column name was not found on the table: " ~ table_models[0].name ~ " " ~ column_names, info=true) -%}
+            {%- endif -%}
+
         {%- endif -%}
 
     {%- endfor -%}
