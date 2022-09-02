@@ -226,6 +226,7 @@
             {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names) -%}
                 {%- if test_model.test_metadata.name == "primary_key" -%}
                     {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
+                    {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
                 {%- else  -%}
                     {%- do dbt_constraints.create_unique_key(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
                 {%- endif -%}
