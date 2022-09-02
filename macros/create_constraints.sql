@@ -184,6 +184,7 @@
                 ( var('dbt_constraints_sources_pk_enabled', false) and test_model.test_metadata.name in("primary_key") )
              or ( var('dbt_constraints_sources_uk_enabled', false) and test_model.test_metadata.name in("unique_key", "unique_combination_of_columns", "unique") )
              or ( var('dbt_constraints_sources_fk_enabled', false) and test_model.test_metadata.name in("foreign_key", "relationships") )
+             or ( var('dbt_constraints_sources_nn_enabled', false) and test_model.test_metadata.name in("not_null") )
             ) -%}
             {%- for node in graph.sources.values()
                 | selectattr("resource_type", "equalto", "source")
