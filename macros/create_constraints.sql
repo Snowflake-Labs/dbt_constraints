@@ -66,26 +66,7 @@
 
 
 {%- macro create_not_null(table_model, column_names, verify_permissions, quote_columns=false) -%}
-    {# {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns)) }} #}
-
-    {%- set table_relation = table_model -%}
-
-    {# Snowflake Adapter #}
-    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
-
-    {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
-
-        {%- set query -%}
-        ALTER TABLE {{table_relation}} MODIFY COLUMN {{columns_csv}} SET NOT NULL;
-        {%- endset -%}
-        {%- do log("Creating not null constraint for: " ~ columns_csv ~ " in " ~ table_relation, info=true) -%}
-        {%- do run_query(query) -%}
-
-    {%- else -%}
-        {%- do log("Skipping not null constraint for " ~ columns_csv ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
-    {%- endif -%}
-    {# END Snowflake Adapter #}
-
+    {{ return(adapter.dispatch('create_not_null', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns)) }}
 {%- endmacro -%}
 
 
@@ -97,13 +78,6 @@
 
 {%- macro foreign_key_exists(table_relation, column_names) -%}
     {{ return(adapter.dispatch('foreign_key_exists', 'dbt_constraints')(table_relation, column_names)) }}
-{%- endmacro -%}
-
-{%- macro not_null_constraint_exists(table_relation, column_names) -%}
-    {# {{ return(adapter.dispatch('unique_constraint_exists', 'dbt_constraints')(table_relation, column_names) ) }} #}
-
-    {# Snowflake Adapter #}
-    {# END Snowflake Adapter #}
 {%- endmacro -%}
 
 

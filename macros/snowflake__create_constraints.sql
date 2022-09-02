@@ -86,7 +86,22 @@
 
 {%- endmacro -%}
 
+{# Snowflake specific implementation to create a not null constraint #}
+{%- macro snowflake__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
+    {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+
+        {%- set query -%}
+        ALTER TABLE {{table_relation}} MODIFY COLUMN {{columns_csv}} SET NOT NULL;
+        {%- endset -%}
+        {%- do log("Creating not null constraint for: " ~ columns_csv ~ " in " ~ table_relation, info=true) -%}
+        {%- do run_query(query) -%}
+
+    {%- else -%}
+        {%- do log("Skipping not null constraint for " ~ columns_csv ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+    {%- endif -%}
+{%- endmacro -%}
 
 {#- This macro is used in create macros to avoid duplicate PK/UK constraints
     and to skip FK where no PK/UK constraint exists on the parent table -#}
