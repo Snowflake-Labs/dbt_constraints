@@ -72,7 +72,22 @@
 
 {%- endmacro -%}
 
+{# PostgreSQL specific implementation to create a not null constraint #}
+{%- macro postgres__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
+    {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+
+        {%- set query -%}
+            ALTER TABLE {{table_relation}} ALTER COLUMN {{columns_csv}} SET NOT NULL;
+        {%- endset -%}
+        {%- do log("Creating not null constraint for: " ~ columns_csv ~ " in " ~ table_relation, info=true) -%}
+        {%- do run_query(query) -%}
+
+    {%- else -%}
+        {%- do log("Skipping not null constraint for " ~ columns_csv ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+    {%- endif -%}
+{%- endmacro -%}
 
 {# PostgreSQL specific implementation to create a foreign key #}
 {%- macro postgres__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true) -%}

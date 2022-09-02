@@ -93,7 +93,7 @@
     {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
         {%- set query -%}
-        ALTER TABLE {{table_relation}} MODIFY COLUMN {{columns_csv}} SET NOT NULL;
+            ALTER TABLE {{table_relation}} MODIFY COLUMN {{columns_csv}} SET NOT NULL;
         {%- endset -%}
         {%- do log("Creating not null constraint for: " ~ columns_csv ~ " in " ~ table_relation, info=true) -%}
         {%- do run_query(query) -%}
