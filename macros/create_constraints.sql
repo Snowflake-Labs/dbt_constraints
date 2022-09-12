@@ -163,7 +163,7 @@
         {%- set table_models = [] -%}
         {%- for node in graph.nodes.values() | selectattr("unique_id", "in", test_model.depends_on.nodes)
                 {#- Update to include snapshot resource type -#}
-                if node.resource_type in ( ( "model, snapshot") )
+                if node.resource_type in ( ( "model", "snapshot") )
                     if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
 
                         {#- Append to our list of models &or snapshots for this test -#}
