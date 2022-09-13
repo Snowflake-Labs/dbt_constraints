@@ -161,13 +161,13 @@
         {#- Find the table models that are referenced by this test.
             These models must be physical tables and cannot be sources -#}
         {%- set table_models = [] -%}
-        {%- for node in graph.nodes.values()
-            | selectattr("resource_type", "equalto", "model")
-            | selectattr("unique_id", "in", test_model.depends_on.nodes)
-            if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
+        {%- for node in graph.nodes.values() | selectattr("unique_id", "in", test_model.depends_on.nodes)
+                {#- Update to include snapshot resource type -#}
+                if node.resource_type in ( ( "model", "snapshot") )
+                    if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
 
-                {#- Append to our list of models for this test -#}
-                {%- do table_models.append(node) -%}
+                        {#- Append to our list of models &or snapshots for this test -#}
+                        {%- do table_models.append(node) -%}
 
         {% endfor %}
 
