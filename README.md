@@ -6,7 +6,7 @@ This package generates database constraints based on the tests in a dbt project.
 
 The primary reason to add constraints to your database tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys. This can both save time and avoid mistakes.
 
-In addition, although Snowflake doesn't enforce most constraints, the [query optimizer can consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints on Snowflake with the RELY property to improve query performance.
+In addition, although Snowflake doesn't enforce most constraints, the [query optimizer can consider primary key, unique key, and foreign key constraints](https://docs.snowflake.com/en/sql-reference/constraints-properties.html?#extended-constraint-properties) during query rewrite if the constraint is set to RELY. Since dbt can test that the data in the table complies with the constraints, this package creates constraints on Snowflake with the RELY property to improve query performance. Some database query optimizers also consider not null constraints when building an execution plan.
 
 Many other databases including PostgreSQL, Oracle, SQL Server, MySQL, and DB2 can use referential integrity constraints to perform "[join elimination](https://blog.jooq.org/join-elimination-an-essential-optimiser-feature-for-advanced-sql-usage/)" to remove tables from an execution plan. This commonly occurs when you query a subset of columns from a view and some of the tables in the view are unnecessary. Even on databases that do not support join elimination, some [BI and visualization tools will also rewrite their queries](https://docs.snowflake.com/en/user-guide/table-considerations.html#referential-integrity-constraints) based on constraint information, producing the same effect.
 
@@ -14,7 +14,7 @@ Finally, although most columnar databases including Snowflake do not use or need
 
 ## Please note
 
-When you add this package, dbt will automatically begin to create unique keys for all your existing `unique` and `dbt_utils.unique_combination_of_columns` tests and foreign keys for existing `relationship` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model.
+When you add this package, dbt will automatically begin to create __unique keys__ for all your existing `unique` and `dbt_utils.unique_combination_of_columns` tests, __foreign keys__ for existing `relationship` tests, and __not null constraints__ for `not_null` tests. The package also provides three new tests (`primary_key`, `unique_key`, and `foreign_key`) that are a bit more flexible than the standard dbt tests. These tests can be used inline, out-of-line, and can support multiple columns when used in the `tests:` section of a model. The `primary_key` test will also cause a not null constraint to be created on each column.
 
 ### Disabling automatic constraint generation
 
@@ -33,6 +33,7 @@ vars:
   dbt_constraints_sources_pk_enabled: true
   dbt_constraints_sources_uk_enabled: true
   dbt_constraints_sources_fk_enabled: true
+  dbt_constraints_sources_nn_enabled: true
 ```
 
 ## Installation
@@ -41,7 +42,7 @@ vars:
 ```yml
 packages:
   - package: Snowflake-Labs/dbt_constraints
-    version: [">=0.4.0", "<0.5.0"]
+    version: [">=0.5.0", "<0.6.0"]
 # <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag.
 # You can also pull the latest changes from Github with the following:
 #  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
@@ -105,6 +106,7 @@ packages:
 <ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false)
 <ADAPTER_NAME>__create_unique_key(table_model, column_names, verify_permissions, quote_columns=false)
 <ADAPTER_NAME>__create_foreign_key(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false)
+<ADAPTER_NAME>__create_not_null(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false)
 <ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names)
 <ADAPTER_NAME>__foreign_key_exists(table_relation, column_names)
 <ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions)
@@ -129,11 +131,11 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 
 - The order of columns on a foreign key test must match between the FK columns and PK columns
 
-- The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model.
+- The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
 
 - Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints.
 
-## Maintainers
+## Primary Maintainers
 
 - Dan Flippo ([@sfc-gh-dflippo](https://github.com/sfc-gh-dflippo))
 
