@@ -17,11 +17,10 @@
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
-            {%- set query -%}
-            ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} )
-            {%- endset -%}
             {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
-            {%- do run_query(query) -%}
+            {%- call statement('add_pk', fetch_result=False, auto_begin=True) -%}
+            ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} )
+            {%- endcall -%}
             {{ adapter.commit() }}
 
         {%- else -%}
@@ -55,11 +54,10 @@
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
-            {%- set query -%}
-            ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} )
-            {%- endset -%}
             {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
-            {%- do run_query(query) -%}
+            {%- call statement('add_uk', fetch_result=False, auto_begin=True) -%}
+            ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} )
+            {%- endcall -%}
             {{ adapter.commit() }}
 
         {%- else -%}
@@ -74,18 +72,23 @@
 
 {# PostgreSQL specific implementation to create a not null constraint #}
 {%- macro postgres__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
-    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
+    {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
     {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
-        {%- set query -%}
-            ALTER TABLE {{table_relation}} ALTER COLUMN {{columns_csv}} SET NOT NULL;
-        {%- endset -%}
-        {%- do log("Creating not null constraint for: " ~ columns_csv ~ " in " ~ table_relation, info=true) -%}
-        {%- do run_query(query) -%}
+            {%- set modify_statements= [] -%}
+            {%- for column in columns_list -%}
+                {%- set modify_statements = modify_statements.append( "ALTER COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+            {%- endfor -%}
+            {%- set modify_statement_csv = modify_statements | join(", ") -%}
+            {%- do log("Creating not null constraint for: " ~ columns_list | join(", ") ~ " in " ~ table_relation, info=true) -%}
+            {%- call statement('add_nn', fetch_result=False, auto_begin=True) -%}
+                ALTER TABLE {{table_relation}} {{ modify_statement_csv }};
+            {%- endcall -%}
+            {{ adapter.commit() }}
 
     {%- else -%}
-        {%- do log("Skipping not null constraint for " ~ columns_csv ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+        {%- do log("Skipping not null constraint for " ~ columns_list | join(", ") ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
     {%- endif -%}
 {%- endmacro -%}
 
@@ -110,11 +113,10 @@
 
             {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions) -%}
 
-                {%- set query -%}
-                ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} ) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
-                {%- endset -%}
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
-                {%- do run_query(query) -%}
+                {%- call statement('add_fk', fetch_result=False, auto_begin=True) -%}
+                ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} ) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+                {%- endcall -%}
                 {{ adapter.commit() }}
 
             {%- else -%}
@@ -246,11 +248,7 @@
 {%- endmacro -%}
 
 
-
-
-{#- PostgreSQL will error if you try to truncate tables with FK constraints or tables with PK/UK constraints
-    referenced by FK so we will drop all constraints before truncating tables -#}
-{% macro postgres__truncate_relation(relation) -%}
+{% macro postgres__drop_referential_constraints(relation) -%}
     {%- set lookup_query -%}
     select constraint_name
     from information_schema.table_constraints
@@ -261,12 +259,25 @@
     {%- set constraint_list = run_query(lookup_query) -%}
 
     {%- for constraint_name in constraint_list.columns["constraint_name"].values() -%}
-        {%- set drop_statement -%}
-        ALTER TABLE {{relation}} DROP CONSTRAINT "{{constraint_name}}" CASCADE
-        {%- endset -%}
         {%- do log("Dropping constraint: " ~ constraint_name ~ " from table " ~ relation, info=false) -%}
-        {%- do run_query(drop_statement) -%}
+        {%- call statement('drop_constraint_cascade', fetch_result=False, auto_begin=True) -%}
+        ALTER TABLE {{relation}} DROP CONSTRAINT IF EXISTS "{{constraint_name}}" CASCADE
+        {%- endcall -%}
+        {{ adapter.commit() }}
     {% endfor %}
 
+{% endmacro %}
+
+{#- PostgreSQL will error if you try to truncate tables with FK constraints or tables with PK/UK constraints
+    referenced by FK so we will drop all constraints before truncating tables -#}
+{% macro postgres__truncate_relation(relation) -%}
+    {{ postgres__drop_referential_constraints(relation) }}
     {{ return(adapter.dispatch('truncate_relation', 'dbt')(relation)) }}
+{% endmacro %}
+
+{#- PostgreSQL will get deadlocks if you try to drop tables with FK constraints or tables with PK/UK constraints
+    referenced by FK so we will drop all constraints before dropping tables -#}
+{% macro postgres__drop_relation(relation) -%}
+    {{ postgres__drop_referential_constraints(relation) }}
+    {{ return(adapter.dispatch('drop_relation', 'dbt')(relation)) }}
 {% endmacro %}

@@ -99,6 +99,11 @@
   {{ return(adapter.dispatch('truncate_relation')(relation)) }}
 {% endmacro %}
 
+{#- Override dbt's drop_relation macro to allow us to create adapter specific versions that drop constraints -#}
+
+{% macro drop_relation(relation) -%}
+  {{ return(adapter.dispatch('drop_relation')(relation)) }}
+{% endmacro %}
 
 
 
@@ -169,13 +174,12 @@
         {#- Find the table models that are referenced by this test.
             These models must be physical tables and cannot be sources -#}
         {%- set table_models = [] -%}
-        {%- for node in graph.nodes.values()
-            | selectattr("resource_type", "equalto", "model")
-            | selectattr("unique_id", "in", test_model.depends_on.nodes)
-            if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
+        {%- for node in graph.nodes.values() | selectattr("unique_id", "in", test_model.depends_on.nodes)
+                if node.resource_type in ( ( "model", "snapshot") )
+                    if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
 
-                {#- Append to our list of models for this test -#}
-                {%- do table_models.append(node) -%}
+                        {#- Append to our list of models &or snapshots for this test -#}
+                        {%- do table_models.append(node) -%}
 
         {% endfor %}
 
@@ -225,8 +229,8 @@
                 identifier=table_models[0].alias ) -%}
             {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names) -%}
                 {%- if test_model.test_metadata.name == "primary_key" -%}
-                    {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
                     {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
+                    {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
                 {%- else  -%}
                     {%- do dbt_constraints.create_unique_key(table_relation, column_names, ns.verify_permissions, quote_columns) -%}
                 {%- endif -%}
@@ -307,7 +311,7 @@
             {%- else  -%}
                 {%- do log("Skipping foreign key because a we couldn't find the child table: model=" ~ fk_model_names ~ " or source=" ~ fk_source_names, info=true) -%}
             {%- endif -%}
-        
+
         {#- We only create NN if there is one model referenced by the test
             and if all the columns exist as physical columns on the table -#}
         {%- elif 1 == table_models|count
@@ -379,8 +383,4 @@
     {%- else -%}
         {{ return(false) }}
     {%- endif -%}
-{%- endmacro -%}
-
-
-{%- macro drop_constraints() -%}
 {%- endmacro -%}

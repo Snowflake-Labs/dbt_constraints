@@ -48,3 +48,4 @@ models:
 
 seeds:
   +quote_columns: false
+  +full_refresh: false

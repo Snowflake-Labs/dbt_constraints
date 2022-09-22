@@ -88,18 +88,23 @@
 
 {# Snowflake specific implementation to create a not null constraint #}
 {%- macro snowflake__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
-    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
+    {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
     {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
-        {%- set query -%}
-            ALTER TABLE {{table_relation}} MODIFY COLUMN {{columns_csv}} SET NOT NULL;
-        {%- endset -%}
-        {%- do log("Creating not null constraint for: " ~ columns_csv ~ " in " ~ table_relation, info=true) -%}
-        {%- do run_query(query) -%}
+            {%- set modify_statements= [] -%}
+            {%- for column in columns_list -%}
+                {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+            {%- endfor -%}
+            {%- set modify_statement_csv = modify_statements | join(", ") -%}
+            {%- set query -%}
+                ALTER TABLE {{table_relation}} MODIFY {{ modify_statement_csv }};
+            {%- endset -%}
+            {%- do log("Creating not null constraint for: " ~ columns_list | join(", ") ~ " in " ~ table_relation, info=true) -%}
+            {%- do run_query(query) -%}
 
     {%- else -%}
-        {%- do log("Skipping not null constraint for " ~ columns_csv ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+        {%- do log("Skipping not null constraint for " ~ columns_list | join(", ") ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
     {%- endif -%}
 {%- endmacro -%}
 
