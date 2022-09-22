@@ -130,8 +130,33 @@ END;
 
 {%- endmacro -%}
 
+{# Oracle specific implementation to create a not null constraint #}
+{%- macro oracle__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+    {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
+    {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
+            {%- set modify_statements= [] -%}
+            {%- for column in columns_list -%}
+                {%- set modify_statements = modify_statements.append( column ~ " NOT NULL" ) -%}
+            {%- endfor -%}
+            {%- set modify_statement_csv = modify_statements | join(", ") -%}
+            {%- set query -%}
+BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE {{table_relation}} MODIFY ( {{ modify_statement_csv }} )';
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
+        DBMS_OUTPUT.PUT_LINE('Unable to create constraint: ' || SQLERRM);
+END;
+            {%- endset -%}
+            {%- do log("Creating not null constraint for: " ~ columns_list | join(", ") ~ " in " ~ table_relation, info=true) -%}
+            {%- do run_query(query) -%}
+
+    {%- else -%}
+        {%- do log("Skipping not null constraint for " ~ columns_list | join(", ") ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+    {%- endif -%}
+{%- endmacro -%}
 {#- This macro is used in create macros to avoid duplicate PK/UK constraints
     and to skip FK where no PK/UK constraint exists on the parent table -#}
 {%- macro oracle__unique_constraint_exists(table_relation, column_names) -%}
@@ -208,3 +233,41 @@ order by 1, 2
 {%- macro oracle__have_ownership_priv(table_relation, verify_permissions) -%}
     {{ return(true) }}
 {%- endmacro -%}
+
+{% macro oracle__drop_referential_constraints(relation) -%}
+    {%- call statement('drop_constraint_cascade') -%}
+BEGIN
+    FOR REC IN (
+        SELECT constraint_name
+        FROM all_constraints cons
+        WHERE cons.constraint_type IN ('P', 'U', 'R')
+            AND upper(cons.owner) = upper('{{relation.schema}}')
+            AND upper(cons.table_name) = upper('{{relation.identifier}}')
+        ORDER BY 1
+    ) LOOP
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER TABLE {{relation}} DROP CONSTRAINT "'||REC.CONSTRAINT_NAME||'" CASCADE';
+        EXCEPTION
+            WHEN OTHERS THEN
+                DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
+                DBMS_OUTPUT.PUT_LINE('Unable to drop constraint: ' || SQLERRM);
+        END;
+    END LOOP;
+END;
+    {%- endcall -%}
+
+{% endmacro %}
+
+{#- Oracle will error if you try to truncate tables with FK constraints or tables with PK/UK constraints
+    referenced by FK so we will drop all constraints before truncating tables -#}
+{% macro oracle__truncate_relation(relation) -%}
+    {{ oracle__drop_referential_constraints(relation) }}
+    {{ return(adapter.dispatch('truncate_relation', 'dbt')(relation)) }}
+{% endmacro %}
+
+{#- Oracle will error if you try to drop tables with FK constraints or tables with PK/UK constraints
+    referenced by FK so we will drop all constraints before dropping tables -#}
+{% macro oracle__drop_relation(relation) -%}
+    {{ oracle__drop_referential_constraints(relation) }}
+    {{ return(adapter.dispatch('drop_relation', 'dbt')(relation)) }}
+{% endmacro %}

@@ -33,3 +33,4 @@ vars:
   dbt_constraints_sources_pk_enabled: true
   dbt_constraints_sources_uk_enabled: true
   dbt_constraints_sources_fk_enabled: true
+  dbt_constraints_sources_nn_enabled: true
