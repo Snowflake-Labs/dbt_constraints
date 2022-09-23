@@ -2,7 +2,7 @@
 {%- macro redshift__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
     {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
 
-    {%- if constraint_name|length > 63 %}
+    {%- if constraint_name|length > 127 %}
         {%- set constraint_name_query %}
         select  'PK_' || md5( '{{ constraint_name }}' )::varchar as "constraint_name"
         {%- endset -%}
@@ -39,7 +39,7 @@
 {%- macro redshift__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
     {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
 
-    {%- if constraint_name|length > 63 %}
+    {%- if constraint_name|length > 127 %}
         {%- set constraint_name_query %}
         select  'UK_' || md5( '{{ constraint_name }}' )::varchar as "constraint_name"
         {%- endset -%}
@@ -81,7 +81,7 @@
 {%- macro redshift__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true) -%}
     {%- set constraint_name = (fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
 
-    {%- if constraint_name|length > 63 %}
+    {%- if constraint_name|length > 127 %}
         {%- set constraint_name_query %}
         select  'FK_' || md5( '{{ constraint_name }}' )::varchar as "constraint_name"
         {%- endset -%}
