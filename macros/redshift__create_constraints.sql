@@ -247,7 +247,7 @@
     {%- for constraint_name in constraint_list.columns["constraint_name"].values() -%}
         {%- do log("Dropping constraint: " ~ constraint_name ~ " from table " ~ relation, info=false) -%}
         {%- call statement('drop_constraint_cascade', fetch_result=False, auto_begin=True) -%}
-        ALTER TABLE {{relation}} DROP CONSTRAINT IF EXISTS "{{constraint_name}}" CASCADE
+        ALTER TABLE {{relation}} DROP CONSTRAINT "{{constraint_name}}" CASCADE
         {%- endcall -%}
         {{ adapter.commit() }}
     {% endfor %}
