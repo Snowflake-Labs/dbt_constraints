@@ -125,6 +125,9 @@
     {%- if execute and var('dbt_constraints_enabled', false) -%}
         {%- do log("Running dbt Constraints", info=true) -%}
 
+        {%- if 'not_null' in constraint_types -%}
+            {%- do dbt_constraints.create_constraints_by_type(['not_null'], quote_columns) -%}
+        {%- endif -%}
         {%- if 'primary_key' in constraint_types -%}
             {%- do dbt_constraints.create_constraints_by_type(['primary_key'], quote_columns) -%}
         {%- endif -%}
@@ -142,9 +145,6 @@
         {%- endif -%}
         {%- if 'relationships' in constraint_types -%}
             {%- do dbt_constraints.create_constraints_by_type(['relationships'], quote_columns) -%}
-        {%- endif -%}
-        {%- if 'not_null' in constraint_types -%}
-            {%- do dbt_constraints.create_constraints_by_type(['not_null'], quote_columns) -%}
         {%- endif -%}
 
         {%- do log("Finished dbt Constraints", info=true) -%}
