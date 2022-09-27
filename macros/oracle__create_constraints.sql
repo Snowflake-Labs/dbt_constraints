@@ -136,10 +136,13 @@ END;
 
     {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
-            {%- set modify_statements= [] -%}
-            {%- for column in columns_list -%}
+        {%- set modify_statements= [] -%}
+        {%- for column in columns_list -%}
+            {%- if not dbt_constraints.not_null_exists(table_relation, column) -%}
                 {%- set modify_statements = modify_statements.append( column ~ " NOT NULL" ) -%}
-            {%- endfor -%}
+            {%- endif -%}
+        {%- endfor -%}
+        {%- if modify_statements | count > 0 -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}
 BEGIN
@@ -152,6 +155,7 @@ END;
             {%- endset -%}
             {%- do log("Creating not null constraint for: " ~ columns_list | join(", ") ~ " in " ~ table_relation, info=true) -%}
             {%- do run_query(query) -%}
+        {%- endif -%}
 
     {%- else -%}
         {%- do log("Skipping not null constraint for " ~ columns_list | join(", ") ~ " in " ~ table_relation ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
@@ -223,6 +227,31 @@ order by 1, 2
     {%- do log("No FK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
     {{ return(false) }}
 {%- endmacro -%}
+
+
+
+{#- This macro is used in create macros to avoid duplicate not null constraints -#}
+{%- macro oracle__not_null_exists(table_relation, column_name) -%}
+    {%- set lookup_query -%}
+    select nullable as "nullable"
+    from all_tab_columns c
+    where upper(c.owner) = upper('{{table_relation.schema}}')
+    and upper(c.table_name) = upper('{{table_relation.identifier}}')
+    and upper(c.column_name) = upper('{{column_name}}')
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {%- set column_list = run_query(lookup_query) -%}
+    {%- if column_list and 'N' in column_list.columns["nullable"].values() -%}
+        {%- do log("Found not null constraint: " ~ table_relation ~ " " ~ column_name, info=false) -%}
+        {{ return(true) }}
+    {%- endif -%}
+
+    {#- If we get this far then the table does not have this constraint -#}
+    {%- do log("No not null constraint: " ~ table_relation ~ " " ~ column_name, info=false) -%}
+    {{ return(false) }}
+{%- endmacro -%}
+
+
 
 {#- Oracle lacks a simple way to verify privileges so we will instead use an exception handler -#}
 {%- macro oracle__have_references_priv(table_relation, verify_permissions) -%}

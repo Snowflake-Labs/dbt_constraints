@@ -80,6 +80,10 @@
     {{ return(adapter.dispatch('foreign_key_exists', 'dbt_constraints')(table_relation, column_names)) }}
 {%- endmacro -%}
 
+{%- macro not_null_exists(table_relation, column_name) -%}
+    {{ return(adapter.dispatch('not_null_exists', 'dbt_constraints')(table_relation, column_name)) }}
+{%- endmacro -%}
+
 
 {#- Define two macros for detecting if we have sufficient privileges that can be overridden by DB implementations -#}
 

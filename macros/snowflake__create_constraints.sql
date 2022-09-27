@@ -94,7 +94,7 @@
 
         {%- set modify_statements= [] -%}
         {%- for column in columns_list -%}
-            {%- if not dbt_constraints.snowflake__not_null_exists(table_relation, column) -%}
+            {%- if not dbt_constraints.not_null_exists(table_relation, column) -%}
                 {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endif -%}
         {%- endfor -%}
