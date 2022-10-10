@@ -14,7 +14,7 @@ NOTE: This test is designed to implement the "primary key" as specified in ANSI 
 {#- This test will return for any duplicates and if any of the key columns is null -#}
 with validation_errors as (
     select
-        {{columns_csv}}, count(*)
+        {{columns_csv}}, count(*) as row_count
     from {{model}}
     group by {{columns_csv}}
     having count(*) > 1
