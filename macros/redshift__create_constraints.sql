@@ -18,10 +18,10 @@
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
             {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
-            {%- call statement('add_pk', fetch_result=False, auto_begin=True) -%}
+            {%- set query -%}
             ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} PRIMARY KEY ( {{columns_csv}} )
-            {%- endcall -%}
-            {{ adapter.commit() }}
+            {%- endset -%}
+            {%- do run_query(query) -%}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
@@ -55,10 +55,10 @@
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
 
             {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
-            {%- call statement('add_uk', fetch_result=False, auto_begin=True) -%}
+            {%- set query -%}
             ALTER TABLE {{table_relation}} ADD CONSTRAINT {{constraint_name}} UNIQUE ( {{columns_csv}} )
-            {%- endcall -%}
-            {{ adapter.commit() }}
+            {%- endset -%}
+            {%- do run_query(query) -%}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=false) -%}
@@ -99,11 +99,11 @@
             {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions) -%}
 
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
-                {%- call statement('add_fk', fetch_result=False, auto_begin=True) -%}
+                {%- set query -%}
                 --Note: ON DELETE not supported in Redshift
                 ALTER TABLE {{fk_table_relation}} ADD CONSTRAINT {{constraint_name}} FOREIGN KEY ( {{fk_columns_csv}} ) REFERENCES {{pk_table_relation}} ( {{pk_columns_csv}} ) --ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
-                {%- endcall -%}
-                {{ adapter.commit() }}
+                {%- endset -%}
+                {%- do run_query(query) -%}
 
             {%- else -%}
                 {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ fk_table_relation ~ " referencing " ~ pk_table_relation, info=true) -%}
@@ -246,10 +246,10 @@
 
     {%- for constraint_name in constraint_list.columns["constraint_name"].values() -%}
         {%- do log("Dropping constraint: " ~ constraint_name ~ " from table " ~ relation, info=false) -%}
-        {%- call statement('drop_constraint_cascade', fetch_result=False, auto_begin=True) -%}
+        {%- set query -%}
         ALTER TABLE {{relation}} DROP CONSTRAINT "{{constraint_name}}" CASCADE
-        {%- endcall -%}
-        {{ adapter.commit() }}
+        {%- endset -%}
+        {%- do run_query(query) -%}
     {% endfor %}
 
 {% endmacro %}
