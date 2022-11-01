@@ -245,12 +245,12 @@
 
             {%- set fk_model = none -%}
             {%- set pk_model = none -%}
-            {%- set fk_model_names = modules.re.findall( "models\W+(\w+)" , test_model.file_key_name)  -%}
+            {%- set fk_model_names = modules.re.findall( "(models|snapshots)\W+(\w+)" , test_model.file_key_name)  -%}
             {%- set fk_source_names = modules.re.findall( "source\W+(\w+)\W+(\w+)" , test_parameters.model)  -%}
 
             {%- if 1 == fk_model_names | count -%}
-                {%- set fk_model = table_models | selectattr("name", "equalto", fk_model_names[0]) | first -%}
-                {%- set pk_model = table_models | rejectattr("name", "equalto", fk_model_names[0]) | first -%}
+                {%- set fk_model = table_models | selectattr("name", "equalto", fk_model_names[0][1]) | first -%}
+                {%- set pk_model = table_models | rejectattr("name", "equalto", fk_model_names[0][1]) | first -%}
             {%- elif 1 == fk_source_names | count  -%}
                 {%- if table_models[0].source_name == fk_source_names[0][0] and table_models[0].name == fk_source_names[0][1] -%}
                     {%- set fk_model = table_models[0] -%}
