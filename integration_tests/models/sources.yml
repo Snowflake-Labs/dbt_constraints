@@ -7,29 +7,44 @@ sources:
   - name: tpc_h
     schema: "{{ target.schema }}"
     tables:
-      - name: part
+      - name: source_part
         columns:
           - name: p_partkey
             description: "The primary key for this table"
             tests:
               - unique
               - not_null
+              - relationships:
+                  to: ref('part')
+                  field: p_partkey
 
-      - name: partsupp
+      - name: source_partsupp
         columns:
           - name: ps_partkey
             description: "Part of compound primary key for this table"
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'part')
+                  to: source('tpc_h', 'source_part')
+                  field: p_partkey
+              - relationships:
+                  to: ref('partsupp')
+                  field: ps_partkey
+              - relationships:
+                  to: ref('part')
                   field: p_partkey
           - name: ps_suppkey
             description: "Part of compound primary key for this table"
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'supplier')
+                  to: source('tpc_h', 'source_supplier')
+                  field: s_suppkey
+              - relationships:
+                  to: ref('partsupp')
+                  field: ps_suppkey
+              - relationships:
+                  to: ref('supplier')
                   field: s_suppkey
         tests:
           # This is a higher performance way to test compound PK/UK
@@ -41,38 +56,47 @@ sources:
           - unique:
               column_name: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
 
-      - name: "supplier"
+      - name: "source_supplier"
         columns:
           - name: "s_suppkey"
             description: "The primary key for this table"
             tests:
               - unique
               - not_null
+              - relationships:
+                  to: ref('supplier')
+                  field: s_suppkey
           - name: s_nationkey
             tests:
               - not_null
 
-      - name: orders
+      - name: source_orders
         columns:
           - name: o_orderkey
             description: "The primary key for this table"
             tests:
               - unique
               - not_null
+              - relationships:
+                  to: ref('orders')
+                  field: o_orderkey
           - name: o_custkey
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'customer')
+                  to: source('tpc_h', 'source_customer')
                   field: c_custkey
 
-      - name: customer
+      - name: source_customer
         columns:
           - name: c_custkey
             description: "The primary key for dim_customers"
             tests:
               - unique
               - not_null
+              - relationships:
+                  to: ref('customer')
+                  field: c_custkey
           - name: c_name
             description: "Customer Name"
             tests:
@@ -81,13 +105,13 @@ sources:
             tests:
               - not_null
 
-      - name: lineitem
+      - name: source_lineitem
         columns:
           - name: l_orderkey
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'orders')
+                  to: source('tpc_h', 'source_orders')
                   field: o_orderkey
           - name: l_linenumber
             tests:
@@ -107,3 +131,13 @@ sources:
               column_name: "coalesce(cast(l_partkey as varchar(100)), '') || '~' || coalesce(cast(l_suppkey as varchar(100)), '')"
               to: source('tpc_h', 'partsupp')
               field: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
+
+          # multi-column FK
+          - dbt_constraints.foreign_key:
+              fk_column_names:
+                - l_orderkey
+                - l_linenumber
+              pk_table_name: ref('lineitem')
+              pk_column_names:
+                - l_orderkey
+                - l_linenumber

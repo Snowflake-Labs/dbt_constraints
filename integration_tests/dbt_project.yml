@@ -48,4 +48,5 @@ models:
 
 seeds:
   +quote_columns: false
-  +full_refresh: false
+  +post-hook: "{{ clone_table('source_') }}"
+  #+full_refresh: false

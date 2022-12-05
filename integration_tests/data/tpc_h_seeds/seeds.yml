@@ -1,0 +1,102 @@
+version: 2
+
+seeds:
+
+  - name: part
+    columns:
+      - name: p_partkey
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+
+  - name: partsupp
+    columns:
+      - name: ps_partkey
+        description: "Part of compound primary key for this table"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('part')
+              field: p_partkey
+      - name: ps_suppkey
+        description: "Part of compound primary key for this table"
+        tests:
+          - not_null
+          - dbt_constraints.foreign_key:
+              pk_table_name: ref('supplier')
+              pk_column_name: s_suppkey
+    tests:
+      # This is a higher performance way to test compound PK/UK
+      - dbt_constraints.unique_key:
+          column_names:
+            - ps_partkey
+            - ps_suppkey
+      # How to validate a compound primary key natively
+      - unique:
+          column_name: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
+
+  - name: supplier
+    columns:
+      - name: s_suppkey
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+      - name: s_nationkey
+        tests:
+          - not_null
+
+  - name: orders
+    columns:
+      - name: o_orderkey
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+      - name: o_custkey
+        tests:
+          - not_null
+          - relationships:
+              to: ref('customer')
+              field: c_custkey
+
+  - name: customer
+    columns:
+      - name: c_custkey
+        description: "The primary key for dim_customers"
+        tests:
+          - dbt_constraints.primary_key
+      - name: c_name
+        description: "Customer Name"
+        tests:
+          - not_null
+      - name: c_nationkey
+        tests:
+          - not_null
+
+  - name: lineitem
+    columns:
+      - name: l_orderkey
+        tests:
+          - not_null
+          - relationships:
+              to: ref('orders')
+              field: o_orderkey
+      - name: l_linenumber
+        tests:
+          - not_null
+    tests:
+      # This is a higher performance way to test compound PK/UK
+      - dbt_constraints.unique_key:
+          column_names:
+            - l_orderkey
+            - l_linenumber
+      # How to validate a compound primary key natively
+      - unique:
+          column_name: "coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '')"
+      # How to validate a compound foreign key
+      - relationships:
+          column_name: "coalesce(cast(l_partkey as varchar(100)), '') || '~' || coalesce(cast(l_suppkey as varchar(100)), '')"
+          to: ref('partsupp')
+          field: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
