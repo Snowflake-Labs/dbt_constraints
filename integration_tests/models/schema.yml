@@ -213,7 +213,11 @@ models:
           - not_null
           # Testing FK to a source
           - relationships:
-              to: source('tpc_h', 'supplier')
+              to: source('tpc_h', 'source_supplier')
+              field: s_suppkey
+          # Testing FK to a seed
+          - relationships:
+              to: ref('supplier')
               field: s_suppkey
     tests:
       - dbt_constraints.unique_key:

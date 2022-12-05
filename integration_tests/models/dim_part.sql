@@ -5,4 +5,4 @@
 SELECT
     P.*,
     DENSE_RANK() over (order by p_partkey) as p_partkey_seq
-FROM {{ source('tpc_h', 'part') }} P
+FROM {{ ref('part') }} P

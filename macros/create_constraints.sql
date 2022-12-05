@@ -175,8 +175,8 @@
             These models must be physical tables and cannot be sources -#}
         {%- set table_models = [] -%}
         {%- for node in graph.nodes.values() | selectattr("unique_id", "in", test_model.depends_on.nodes)
-                if node.resource_type in ( ( "model", "snapshot") )
-                    if node.config.materialized in( ("table", "incremental", "snapshot") ) -%}
+                if node.resource_type in ( ( "model", "snapshot", "seed") )
+                    if node.config.materialized in( ("table", "incremental", "snapshot", "seed") ) -%}
 
                         {#- Append to our list of models &or snapshots for this test -#}
                         {%- do table_models.append(node) -%}
@@ -245,7 +245,7 @@
 
             {%- set fk_model = none -%}
             {%- set pk_model = none -%}
-            {%- set fk_model_names = modules.re.findall( "(models|snapshots)\W+(\w+)" , test_model.file_key_name)  -%}
+            {%- set fk_model_names = modules.re.findall( "(models|snapshots|seeds)\W+(\w+)" , test_model.file_key_name)  -%}
             {%- set fk_source_names = modules.re.findall( "source\W+(\w+)\W+(\w+)" , test_parameters.model)  -%}
 
             {%- if 1 == fk_model_names | count -%}
