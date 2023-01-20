@@ -1,6 +1,6 @@
 {# Redshift specific implementation to create a primary key #}
-{%- macro redshift__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
-    {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
+{%- macro redshift__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
 
     {%- if constraint_name|length > 127 %}
         {%- set constraint_name_query %}
@@ -13,9 +13,9 @@
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
-    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
+    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 
-        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
             {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
             {%- set query -%}
@@ -36,8 +36,8 @@
 
 
 {# Redshift specific implementation to create a unique key #}
-{%- macro redshift__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
-    {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
+{%- macro redshift__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
 
     {%- if constraint_name|length > 127 %}
         {%- set constraint_name_query %}
@@ -50,9 +50,9 @@
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
-    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
+    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 
-        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
             {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
             {%- set query -%}
@@ -71,15 +71,15 @@
 {%- endmacro -%}
 
 {# Redshift specific implementation to create a not null constraint #}
-{%- macro redshift__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+{%- macro redshift__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false, lookup_cache=none) -%}
     {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
     {%- do log("Skipping not null constraint for " ~ columns_list | join(", ") ~ " in " ~ table_relation ~ " because ALTER COLUMN SET NOT NULL is not supported", info=true) -%}
 {%- endmacro -%}
 
 {# Redshift specific implementation to create a foreign key #}
-{%- macro redshift__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true) -%}
-    {%- set constraint_name = (fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
+{%- macro redshift__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true, constraint_name=none, lookup_cache=none) -%}
+    {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
 
     {%- if constraint_name|length > 127 %}
         {%- set constraint_name_query %}
@@ -92,11 +92,11 @@
     {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
     {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
     {#- Check that the PK table has a PK or UK -#}
-    {%- if dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names) -%}
+    {%- if dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names, lookup_cache) -%}
         {#- Check if the table already has this foreign key -#}
         {%- if not dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names) -%}
 
-            {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions) -%}
+            {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions, lookup_cache) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions, lookup_cache) -%}
 
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
                 {%- set query -%}
@@ -122,7 +122,7 @@
 
 {#- This macro is used in create macros to avoid duplicate PK/UK constraints
     and to skip FK where no PK/UK constraint exists on the parent table -#}
-{%- macro redshift__unique_constraint_exists(table_relation, column_names) -%}
+{%- macro redshift__unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
     {%- set lookup_query -%}
     SELECT
         kc.constraint_name
@@ -156,7 +156,7 @@
 
 
 {#- This macro is used in create macros to avoid duplicate FK constraints -#}
-{%- macro redshift__foreign_key_exists(table_relation, column_names) -%}
+{%- macro redshift__foreign_key_exists(table_relation, column_names, lookup_cache) -%}
     {%- set lookup_query -%}
     SELECT
         kc.constraint_name fk_name
@@ -188,7 +188,7 @@
 {%- endmacro -%}
 
 
-{%- macro redshift__have_references_priv(table_relation, verify_permissions) -%}
+{%- macro redshift__have_references_priv(table_relation, verify_permissions, lookup_cache) -%}
     {%- if verify_permissions is sameas true -%}
 
         {%- set lookup_query -%}
@@ -211,7 +211,7 @@
 {%- endmacro -%}
 
 
-{%- macro redshift__have_ownership_priv(table_relation, verify_permissions) -%}
+{%- macro redshift__have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
     {%- if verify_permissions is sameas true -%}
 
         {%- set lookup_query -%}
