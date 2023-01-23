@@ -85,7 +85,7 @@ END;
 
 
 {# Oracle specific implementation to create a foreign key #}
-{%- macro oracle__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true, constraint_name=none, lookup_cache=none) -%}
+{%- macro oracle__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache) -%}
     {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
 
     {%- if constraint_name|length > 30 %}
@@ -131,7 +131,7 @@ END;
 {%- endmacro -%}
 
 {# Oracle specific implementation to create a not null constraint #}
-{%- macro oracle__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+{%- macro oracle__create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache) -%}
     {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
     {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
@@ -225,12 +225,12 @@ order by 1, 2
 {%- endmacro -%}
 
 {#- Oracle lacks a simple way to verify privileges so we will instead use an exception handler -#}
-{%- macro oracle__have_references_priv(table_relation, verify_permissions) -%}
+{%- macro oracle__have_references_priv(table_relation, verify_permissions, lookup_cache) -%}
     {{ return(true) }}
 {%- endmacro -%}
 
 {#- Oracle lacks a simple way to verify privileges so we will instead use an exception handler -#}
-{%- macro oracle__have_ownership_priv(table_relation, verify_permissions) -%}
+{%- macro oracle__have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
     {{ return(true) }}
 {%- endmacro -%}
 
@@ -238,15 +238,15 @@ order by 1, 2
     {%- call statement('drop_constraint_cascade') -%}
 BEGIN
     FOR REC IN (
-        SELECT constraint_name
+        SELECT owner, table_name, constraint_name
         FROM all_constraints cons
         WHERE cons.constraint_type IN ('P', 'U', 'R')
-            AND upper(cons.owner) = upper('{{relation.schema}}')
-            AND upper(cons.table_name) = upper('{{relation.identifier}}')
+            AND upper(cons.owner) = '{{relation.schema|upper}}'
+            AND upper(cons.table_name) = '{{relation.identifier|upper}}'
         ORDER BY 1
     ) LOOP
         BEGIN
-            EXECUTE IMMEDIATE 'ALTER TABLE {{relation}} DROP CONSTRAINT "'||REC.CONSTRAINT_NAME||'" CASCADE';
+            EXECUTE IMMEDIATE 'ALTER TABLE "'||REC.OWNER||'"."'||REC.TABLE_NAME||'" DROP CONSTRAINT "'||REC.CONSTRAINT_NAME||'" CASCADE';
         EXCEPTION
             WHEN OTHERS THEN
                 DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
@@ -261,6 +261,7 @@ END;
 {#- Oracle will error if you try to truncate tables with FK constraints or tables with PK/UK constraints
     referenced by FK so we will drop all constraints before truncating tables -#}
 {% macro oracle__truncate_relation(relation) -%}
+    {%- do log("Truncating table " ~ relation, info=true) -%}
     {{ oracle__drop_referential_constraints(relation) }}
     {{ return(adapter.dispatch('truncate_relation', 'dbt')(relation)) }}
 {% endmacro %}
@@ -268,6 +269,40 @@ END;
 {#- Oracle will error if you try to drop tables with FK constraints or tables with PK/UK constraints
     referenced by FK so we will drop all constraints before dropping tables -#}
 {% macro oracle__drop_relation(relation) -%}
-    {{ oracle__drop_referential_constraints(relation) }}
-    {{ return(adapter.dispatch('drop_relation', 'dbt')(relation)) }}
+    {%- do log("Dropping table " ~ relation, info=true) -%}
+        {%- call statement('drop_constraint_cascade') -%}
+BEGIN
+    FOR REC IN (
+        SELECT owner, table_name, constraint_name
+        FROM all_constraints cons
+        WHERE cons.constraint_type IN ('P', 'U', 'R')
+            AND upper(cons.owner) = '{{relation.schema|upper}}'
+            AND upper(cons.table_name) = '{{relation.identifier|upper}}'
+        ORDER BY 1
+    ) LOOP
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER TABLE "'||REC.OWNER||'"."'||REC.TABLE_NAME||'" DROP CONSTRAINT "'||REC.CONSTRAINT_NAME||'" CASCADE';
+        EXCEPTION
+            WHEN OTHERS THEN
+                DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
+                DBMS_OUTPUT.PUT_LINE('Unable to drop constraint: ' || SQLERRM);
+        END;
+    END LOOP;
+    FOR REC IN (
+        SELECT owner, table_name
+        FROM all_tables
+        WHERE upper(owner) = '{{relation.schema|upper}}'
+            AND upper(table_name) = '{{relation.identifier|upper}}'
+        ORDER BY 1
+    ) LOOP
+        BEGIN
+            EXECUTE IMMEDIATE 'DROP TABLE "'||REC.OWNER||'"."'||REC.TABLE_NAME||'" CASCADE CONSTRAINTS';
+        EXCEPTION
+            WHEN OTHERS THEN
+                DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
+                DBMS_OUTPUT.PUT_LINE('Unable to drop table: ' || SQLERRM);
+        END;
+    END LOOP;
+END;
+    {%- endcall -%}
 {% endmacro %}
