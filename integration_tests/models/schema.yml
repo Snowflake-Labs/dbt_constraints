@@ -79,7 +79,6 @@ models:
           - not_null
       - name: o_custkey
         tests:
-          - not_null
           - relationships:
               to: ref('dim_customers')
               field: c_custkey
@@ -111,6 +110,12 @@ models:
           - relationships:
               to: ref('dim_orders')
               field: o_orderkey
+      - name: l_partkey
+        description: "1st column in FK to dim_part_supplier. Testing behavior when one key is nullable and the second is not."
+      - name: l_suppkey
+        description: "2nd column in FK to dim_part_supplier. Testing behavior when one key is nullable and the second is not."
+        tests:
+          - not_null
       - name: l_linenumber
         description: "Order Line Number and second key in PK"
       - name: integration_id
