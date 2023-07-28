@@ -172,6 +172,9 @@
             and res.node.config.materialized == "test"
             and res.node.test_metadata
             and res.node.test_metadata.name is in( constraint_types )
+            and res.failures == 0
+            and res.node.config.error_if == '!= 0'
+            and res.node.config.warn_if == '!= 0'
             and res.node.config.where is none -%}
 
         {%- set test_model = res.node -%}

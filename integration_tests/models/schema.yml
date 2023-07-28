@@ -225,7 +225,7 @@ models:
               to: ref('supplier')
               field: s_suppkey
     tests:
-      - dbt_constraints.unique_key:
+      - dbt_constraints.primary_key:
           column_names:
             - ps_partkey
             - ps_suppkey
