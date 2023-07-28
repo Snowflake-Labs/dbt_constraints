@@ -42,7 +42,7 @@ vars:
 ```yml
 packages:
   - package: Snowflake-Labs/dbt_constraints
-    version: [">=0.5.0", "<0.6.0"]
+    version: [">=0.6.0", "<0.7.0"]
 # <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag.
 # You can also pull the latest changes from Github with the following:
 #  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
@@ -103,14 +103,14 @@ packages:
 * The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
 
 ```
-<ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false)
-<ADAPTER_NAME>__create_unique_key(table_model, column_names, verify_permissions, quote_columns=false)
-<ADAPTER_NAME>__create_foreign_key(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false)
-<ADAPTER_NAME>__create_not_null(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false)
-<ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names)
-<ADAPTER_NAME>__foreign_key_exists(table_relation, column_names)
-<ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions)
-<ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions)
+<ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
+<ADAPTER_NAME>__create_unique_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
+<ADAPTER_NAME>__create_foreign_key(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
+<ADAPTER_NAME>__create_not_null(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false, lookup_cache=none)
+<ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names, lookup_cache=none)
+<ADAPTER_NAME>__foreign_key_exists(table_relation, column_names, lookup_cache=none)
+<ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions, lookup_cache=none)
+<ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions, lookup_cache=none)
 ```
 
 ## dbt_constraints Limitations

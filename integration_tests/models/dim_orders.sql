@@ -6,4 +6,4 @@ SELECT
   O.*,
   DENSE_RANK() over (order by o_orderkey) as o_orderkey_seq
 FROM
-{{ source('tpc_h', 'orders') }} O
+{{ ref('orders') }} O

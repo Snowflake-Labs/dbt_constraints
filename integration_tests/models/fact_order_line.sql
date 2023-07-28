@@ -13,8 +13,8 @@ SELECT
   lineitem.*,
   cast(TO_CHAR(o_orderdate, 'YYYYMMDD') AS INTEGER) AS o_orderdate_key,
   coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '') AS integration_id
-FROM {{ source('tpc_h', 'lineitem') }} lineitem
-JOIN {{ source('tpc_h', 'orders') }} orders ON l_orderkey = o_orderkey
+FROM {{ ref('lineitem') }} lineitem
+JOIN {{ ref('orders') }} orders ON l_orderkey = o_orderkey
 
 {% if is_incremental() -%}
 

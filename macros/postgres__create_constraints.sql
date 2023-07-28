@@ -1,6 +1,6 @@
 {# PostgreSQL specific implementation to create a primary key #}
-{%- macro postgres__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
-    {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
+{%- macro postgres__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
 
     {%- if constraint_name|length > 63 %}
         {%- set constraint_name_query %}
@@ -13,9 +13,9 @@
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
-    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
+    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 
-        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
             {%- do log("Creating primary key: " ~ constraint_name, info=true) -%}
             {%- call statement('add_pk', fetch_result=False, auto_begin=True) -%}
@@ -36,8 +36,8 @@
 
 
 {# PostgreSQL specific implementation to create a unique key #}
-{%- macro postgres__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false) -%}
-    {%- set constraint_name = (table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
+{%- macro postgres__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
 
     {%- if constraint_name|length > 63 %}
         {%- set constraint_name_query %}
@@ -50,9 +50,9 @@
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
-    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names) -%}
+    {%- if not dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 
-        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
             {%- do log("Creating unique key: " ~ constraint_name, info=true) -%}
             {%- call statement('add_uk', fetch_result=False, auto_begin=True) -%}
@@ -71,10 +71,10 @@
 {%- endmacro -%}
 
 {# PostgreSQL specific implementation to create a not null constraint #}
-{%- macro postgres__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false) -%}
+{%- macro postgres__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false, lookup_cache=none) -%}
     {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
-    {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions) -%}
+    {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
@@ -93,8 +93,8 @@
 {%- endmacro -%}
 
 {# PostgreSQL specific implementation to create a foreign key #}
-{%- macro postgres__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true) -%}
-    {%- set constraint_name = (fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
+{%- macro postgres__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true, constraint_name=none, lookup_cache=none) -%}
+    {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
 
     {%- if constraint_name|length > 63 %}
         {%- set constraint_name_query %}
@@ -107,11 +107,11 @@
     {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
     {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
     {#- Check that the PK table has a PK or UK -#}
-    {%- if dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names) -%}
+    {%- if dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names, lookup_cache) -%}
         {#- Check if the table already has this foreign key -#}
         {%- if not dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names) -%}
 
-            {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions) -%}
+            {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions, lookup_cache) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions, lookup_cache) -%}
 
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
                 {%- call statement('add_fk', fetch_result=False, auto_begin=True) -%}
@@ -136,7 +136,7 @@
 
 {#- This macro is used in create macros to avoid duplicate PK/UK constraints
     and to skip FK where no PK/UK constraint exists on the parent table -#}
-{%- macro postgres__unique_constraint_exists(table_relation, column_names) -%}
+{%- macro postgres__unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
     {%- set lookup_query -%}
     select c.oid as constraint_name
         , upper(col.attname) as column_name
@@ -170,7 +170,7 @@
 
 
 {#- This macro is used in create macros to avoid duplicate FK constraints -#}
-{%- macro postgres__foreign_key_exists(table_relation, column_names) -%}
+{%- macro postgres__foreign_key_exists(table_relation, column_names, lookup_cache) -%}
     {%- set lookup_query -%}
     select c.oid as fk_name
         , upper(col.attname) as fk_column_name
@@ -202,7 +202,7 @@
 {%- endmacro -%}
 
 
-{%- macro postgres__have_references_priv(table_relation, verify_permissions) -%}
+{%- macro postgres__have_references_priv(table_relation, verify_permissions, lookup_cache) -%}
     {%- if verify_permissions is sameas true -%}
 
         {%- set lookup_query -%}
@@ -225,7 +225,7 @@
 {%- endmacro -%}
 
 
-{%- macro postgres__have_ownership_priv(table_relation, verify_permissions) -%}
+{%- macro postgres__have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
     {%- if verify_permissions is sameas true -%}
 
         {%- set lookup_query -%}
