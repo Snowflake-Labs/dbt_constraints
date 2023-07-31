@@ -1,6 +1,6 @@
 # dbt Constraints Package
 
-This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, and Oracle only.
+This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, Oracle, Redshift, and Vertica only.
 
 ## Why data engineers should add referential integrity constraints
 
@@ -117,13 +117,13 @@ packages:
 
 Generally, if you don't meet a requirement, tests are still executed but the constraint is skipped rather than producing an error.
 
-- All models involved in a constraint must be materialized as table, incremental, or snapshot.
+- All models involved in a constraint must be materialized as table, incremental, snapshot, or seed.
 
 -  If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
 
 - All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 
-- Constraints are not created for failed tests
+- Constraints are not created for failed tests. See how to get around this using severity and `config: always_create_constraint: true` in the next section.
 
 - `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
 
@@ -133,7 +133,46 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 
 - The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
 
-- Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints.
+- Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints. See how to disable this rule using `config: always_create_constraint: true` in the next section.
+
+
+## Advanced: `config: always_create_constraint: true` property
+There is an advanced option to force a constraint to be generated when there is a `config: where:` property or if the constraint has a threshold. The `config: always_create_constraint: true` property will override those exclusions. When this setting is in effect, you can create constraints even when you have excluded some records or have a number of failures below a threshold. If your test has a status of 'failed', it will still be skipped. Please see [dbt's documentation on how to set a threshold for failures](https://docs.getdbt.com/reference/resource-configs/severity).
+
+__Caveat Emptor:__
+* You will get an error if you try to force constraints to be generated that are enforced by your database. On Snowflake that is only a not_null constraint but on databases like Oracle, all the generated constraints are enforced.
+* This feature could cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination).
+
+This is an example using the feature:
+```yml
+  - name: dim_duplicate_orders
+    description: "Test that we do not try to create PK/UK on failed tests"
+    columns:
+      - name: o_orderkey
+        description: "The primary key for this table"
+      - name: o_orderkey_seq
+        description: "duplicate seq column to test UK"
+    tests:
+      # This constraint should be skipped because it has failures
+      - dbt_constraints.primary_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
+      # This constraint should be still generated because always_create_constraint=true
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            warn_if: ">= 5000"
+            error_if: ">= 10000"
+            always_create_constraint: true
+      # This constraint should be still generated because always_create_constraint=true
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey_seq
+          config:
+            severity: warn
+            always_create_constraint: true
+```
+
 
 ## Primary Maintainers
 
