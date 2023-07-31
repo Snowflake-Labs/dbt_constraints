@@ -2,6 +2,10 @@
 
 This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, Oracle, Redshift, and Vertica only.
 
+## How the dbt Constraints Package differs from dbt's Model Contracts feature
+
+This package focuses on automatically generating constraints base on the tests already in a user's dbt project. In most cases, merely adding the dbt Constraints package is all that is needed to generate constraints. dbt's recent [model contracts feature](https://docs.getdbt.com/docs/collaborate/govern/model-contracts) allows users to explicitly document constraints for models in yml. This package and the core feature are 100% compatible with one another and the dbt Constraints package will skip generating constraints already created by a model constract. However, the dbt Constraints package will also generate constraints for any tests that are not documented as model contracts. As decribed in the next section dbt Constraints is also designed to provide join elimination on Snowflake.
+
 ## Why data engineers should add referential integrity constraints
 
 The primary reason to add constraints to your database tables is that many tools including [DBeaver](https://dbeaver.io) and [Oracle SQL Developer Data Modeler](https://community.snowflake.com/s/article/How-To-Customizing-Oracle-SQL-Developer-Data-Modeler-SDDM-to-Support-Snowflake-Variant) can correctly reverse-engineer data model diagrams if there are primary keys, unique keys, and foreign keys on tables. Most BI tools will also add joins automatically between tables when you import tables that have foreign keys. This can both save time and avoid mistakes.
