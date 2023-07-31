@@ -168,14 +168,14 @@
     {#- Loop through the results and find all tests that passed and match the constraint_types -#}
     {#- Issue #2: added condition that the where config must be empty -#}
     {%- for res in results
-        if res.status == "pass"
-            and res.node.config.materialized == "test"
+        if res.node.config.materialized == "test"
+            and res.status in ("pass", "warn")
             and res.node.test_metadata
             and res.node.test_metadata.name is in( constraint_types )
-            and res.failures == 0
-            and res.node.config.error_if == '!= 0'
-            and res.node.config.warn_if == '!= 0'
-            and res.node.config.where is none -%}
+            and ( res.failures == 0 or
+                  res.node.config.get("always_create_constraint", false) )
+            and ( res.node.config.where is none or
+                  res.node.config.get("always_create_constraint", false) )  -%}
 
         {%- set test_model = res.node -%}
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
