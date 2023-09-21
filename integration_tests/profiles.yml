@@ -1,0 +1,36 @@
+dbt_constraints:
+  target: snowflake
+  outputs:
+    snowflake:
+      type: "snowflake"
+      client_session_keep_alive: False
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      # The DBT_ENV_SECRET_ prefix prevents the variable being included in logs
+      private_key: "{{ env_var('DBT_ENV_SECRET_PRIVATE_KEY') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+      threads: "{{ env_var('SNOWFLAKE_THREADS', '8') | as_number }}"
+      query_tag: dbt_constraints
+    oracle:
+      database: XEPDB1
+      host: localhost
+      pass: dbt_user2
+      port: 1521
+      protocol: tcp
+      schema: DBT_USER
+      service: XEPDB1
+      threads: 4
+      type: oracle
+      user: DBT_USER
+    postgres:
+      dbname: postgres
+      host: localhost
+      password: Snowflake
+      port: 5432
+      schema: dbt_demo
+      threads: 1
+      type: postgres
+      user: postgres

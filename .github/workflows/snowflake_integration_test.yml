@@ -1,0 +1,32 @@
+name: snowflake_integration_test.yml
+on: workflow_dispatch
+
+jobs:
+  dbt_job:
+    environment: dev
+    runs-on: ubuntu-latest
+    container: ghcr.io/dbt-labs/dbt-snowflake:1.6.0
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v3
+      - name: Run dbt
+        env:
+          DBT_PROJECT_DIR: ./integration_tests
+          DBT_PROFILES_DIR: ./integration_tests
+
+          # The following can be created as environment variables
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ vars.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ vars.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_THREADS: ${{ vars.SNOWFLAKE_THREADS }}
+          SNOWFLAKE_QUERY_TAG: ${{ vars.SNOWFLAKE_QUERY_TAG }}
+
+          # The private key should be created as a secret
+          DBT_ENV_SECRET_PRIVATE_KEY: ${{ secrets.DBT_ENV_SECRET_PRIVATE_KEY }}
+
+        run: |
+          dbt deps
+          dbt build
