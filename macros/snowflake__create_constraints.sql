@@ -264,6 +264,8 @@
 {%- macro snowflake__lookup_table_privileges(table_relation, lookup_cache) -%}
 
     {%- if table_relation.database not in lookup_cache.table_privileges -%}
+        {%- do log("Caching privileges for database: " ~ table_relation.database, info=false) -%}
+
         {%- set lookup_query -%}
         select distinct
             upper(tp.table_schema) as "table_schema",
@@ -273,8 +275,20 @@
         where is_role_in_session(tp.grantee)
             and tp.privilege_type in ('OWNERSHIP', 'REFERENCES')
         {%- endset -%}
-        {%- do log("Caching privileges for database: " ~ table_relation.database, info=false) -%}
-        {%- set privilege_list = run_query(lookup_query) -%}
+        {%- set role_privilege_list = run_query(lookup_query) -%}
+
+        {%- set lookup_query -%}
+        select distinct
+            upper(tp.table_schema) as "table_schema",
+            upper(tp.table_name) as "table_name",
+            tp.privilege_type as "privilege_type"
+        from {{table_relation.database}}.information_schema.table_privileges tp
+        where is_database_role_in_session(tp.grantee)
+            and tp.privilege_type in ('OWNERSHIP', 'REFERENCES')
+        {%- endset -%}
+        {%- set db_role_privilege_list = run_query(lookup_query) -%}
+
+        {%- set privilege_list = role_privilege_list.merge([role_privilege_list, db_role_privilege_list]).distinct() -%}
         {%- do lookup_cache.table_privileges.update({ table_relation.database: privilege_list }) -%}
     {%- endif -%}
 
