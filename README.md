@@ -43,6 +43,7 @@ vars:
 ## Installation
 
 1. Add this package to your `packages.yml` following [these instructions](https://docs.getdbt.com/docs/building-a-dbt-project/package-management/). Please check [this link for the latest released version](https://github.com/Snowflake-Labs/dbt_constraints/releases/latest).
+
 ```yml
 packages:
   - package: Snowflake-Labs/dbt_constraints
@@ -56,6 +57,7 @@ packages:
 2. Run `dbt deps`.
 
 3. Optionally add `primary_key`, `unique_key`, or `foreign_key` tests to your model like the following examples.
+
 ```yml
   - name: DIM_ORDER_LINES
     columns:
@@ -106,7 +108,7 @@ packages:
 
 * The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
 
-```
+```sql
 <ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
 <ADAPTER_NAME>__create_unique_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
 <ADAPTER_NAME>__create_foreign_key(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
@@ -121,33 +123,35 @@ packages:
 
 Generally, if you don't meet a requirement, tests are still executed but the constraint is skipped rather than producing an error.
 
-- All models involved in a constraint must be materialized as table, incremental, snapshot, or seed.
+* All models involved in a constraint must be materialized as table, incremental, snapshot, or seed.
 
-- If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
+* If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
 
-- All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
+* All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 
-- Constraints are not created for failed tests. See how to get around this using severity and `config: always_create_constraint: true` in the next section.
+* Constraints are not created for failed tests. See how to get around this using severity and `config: always_create_constraint: true` in the next section.
 
-- `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
+* `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
 
-- Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
+* Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
 
-- The order of columns on a foreign key test must match between the FK columns and PK columns
+* The order of columns on a foreign key test must match between the FK columns and PK columns
 
-- The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
+* The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
 
-- Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints. See how to disable this rule using `config: always_create_constraint: true` in the next section.
-
+* Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints. See how to disable this rule using `config: always_create_constraint: true` in the next section.
 
 ## Advanced: `config: always_create_constraint: true` property
+
 There is an advanced option to force a constraint to be generated when there is a `config: where:` property or if the constraint has a threshold. The `config: always_create_constraint: true` property will override those exclusions. When this setting is in effect, you can create constraints even when you have excluded some records or have a number of failures below a threshold. If your test has a status of 'failed', it will still be skipped. Please see [dbt's documentation on how to set a threshold for failures](https://docs.getdbt.com/reference/resource-configs/severity).
 
 __Caveat Emptor:__
+
 * You will get an error if you try to force constraints to be generated that are enforced by your database. On Snowflake that is only a not_null constraint but on databases like Oracle, all the generated constraints are enforced.
 * This feature could cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination).
 
 This is an example using the feature:
+
 ```yml
   - name: dim_duplicate_orders
     description: "Test that we do not try to create PK/UK on failed tests"
@@ -177,10 +181,9 @@ This is an example using the feature:
             always_create_constraint: true
 ```
 
-
 ## Primary Maintainers
 
-- Dan Flippo ([@sfc-gh-dflippo](https://github.com/sfc-gh-dflippo))
+* Dan Flippo ([@sfc-gh-dflippo](https://github.com/sfc-gh-dflippo))
 
 This is a community-developed package, not an official Snowflake offering. It comes with no support or warranty. However, feel free to raise a github issue if you find a bug or would like a new feature.
 
