@@ -1,5 +1,5 @@
 dbt_constraints:
-  target: snowflake
+  target: databricks
   outputs:
     snowflake:
       type: "snowflake"
@@ -34,3 +34,13 @@ dbt_constraints:
       threads: 1
       type: postgres
       user: postgres
+    databricks:
+      type: databricks
+      catalog: "{{ env_var('DATABRICKS_CATALOG') }}"
+      schema: "{{ env_var('DATABRICKS_SCHEMA') }}"
+      host: "{{ env_var('DATABRICKS_HOST') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH') }}"
+      token: "{{ env_var('DATABRICKS_TOKEN') }}"
+      threads: "{{ env_var('DATABRICKS_THREADS', '4') | as_number }}"
+      connect_retries: 5
+      connect_timeout: 4

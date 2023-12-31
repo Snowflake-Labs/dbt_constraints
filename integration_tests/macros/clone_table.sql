@@ -72,4 +72,16 @@ END;
 
 {%- endmacro -%}
 
+{%- macro databricks__clone_table(new_prefix) -%}
+    {%- set table_clone = api.Relation.create(
+            database = this.database,
+            schema = this.schema,
+            identifier = new_prefix ~ this.identifier ) -%}
 
+    {%- set clone_statement -%}
+    create or replace table {{table_clone}} deep clone {{this}}
+    {%- endset -%}
+    {%- do log("Creating table clone: " ~ table_clone, info=false) -%}
+    {%- do run_query(clone_statement) -%}
+
+{%- endmacro -%}

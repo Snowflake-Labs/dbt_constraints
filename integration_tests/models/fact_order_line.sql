@@ -11,7 +11,11 @@
 
 SELECT
   lineitem.*,
+{%- if target.type == "databricks" -%}
+  cast(date_format(o_orderdate, 'yMMd') AS INTEGER) AS o_orderdate_key,
+{%- else -%}
   cast(TO_CHAR(o_orderdate, 'YYYYMMDD') AS INTEGER) AS o_orderdate_key,
+{%- endif -%}
   coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '') AS integration_id
 FROM {{ ref('lineitem') }} lineitem
 JOIN {{ ref('orders') }} orders ON l_orderkey = o_orderkey
