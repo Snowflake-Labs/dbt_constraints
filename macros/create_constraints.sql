@@ -175,7 +175,8 @@
             and ( res.failures == 0 or
                   res.node.config.get("always_create_constraint", false) )
             and ( res.node.config.where is none or
-                  res.node.config.get("always_create_constraint", false) )  -%}
+                  res.node.config.get("always_create_constraint", false) )
+            and res.node.config.get("dbt_constraints_enabled", true)  -%}
 
         {%- set test_model = res.node -%}
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
