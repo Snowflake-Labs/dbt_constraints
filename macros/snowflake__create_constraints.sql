@@ -272,23 +272,10 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
             upper(tp.table_name) as "table_name",
             tp.privilege_type as "privilege_type"
         from {{ table_relation.database }}.information_schema.table_privileges tp
-        where is_role_in_session(tp.grantee)
+        where (is_role_in_session(tp.grantee) or is_database_role_in_session(tp.grantee))
             and tp.privilege_type in ('OWNERSHIP', 'REFERENCES')
         {%- endset -%}
-        {%- set role_privilege_list = run_query(lookup_query) -%}
-
-        {%- set lookup_query -%}
-        select distinct
-            upper(tp.table_schema) as "table_schema",
-            upper(tp.table_name) as "table_name",
-            tp.privilege_type as "privilege_type"
-        from {{ table_relation.database }}.information_schema.table_privileges tp
-        where is_database_role_in_session(tp.grantee)
-            and tp.privilege_type in ('OWNERSHIP', 'REFERENCES')
-        {%- endset -%}
-        {%- set db_role_privilege_list = run_query(lookup_query) -%}
-
-        {%- set privilege_list = role_privilege_list.merge([role_privilege_list, db_role_privilege_list]).distinct() -%}
+        {%- set privilege_list = run_query(lookup_query) -%}
         {%- do lookup_cache.table_privileges.update({ table_relation.database: privilege_list }) -%}
     {%- endif -%}
 
