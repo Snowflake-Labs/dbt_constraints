@@ -50,23 +50,23 @@
 
 {#- Define three create macros for PK, UK, and FK that can be overridden by DB implementations -#}
 
-{%- macro create_primary_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
-    {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache)) }}
+{%- macro create_primary_key(table_model, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
+    {{ return(adapter.dispatch('create_primary_key', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause)) }}
 {%- endmacro -%}
 
 
-{%- macro create_unique_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
-    {{ return(adapter.dispatch('create_unique_key', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache)) }}
+{%- macro create_unique_key(table_model, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
+    {{ return(adapter.dispatch('create_unique_key', 'dbt_constraints')(table_model, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause)) }}
 {%- endmacro -%}
 
 
-{%- macro create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache) -%}
-    {{ return(adapter.dispatch('create_foreign_key', 'dbt_constraints')(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache)) }}
+{%- macro create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
+    {{ return(adapter.dispatch('create_foreign_key', 'dbt_constraints')(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause)) }}
 {%- endmacro -%}
 
 
-{%- macro create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache) -%}
-    {{ return(adapter.dispatch('create_not_null', 'dbt_constraints')(table_relation, column_names, verify_permissions, quote_columns, lookup_cache)) }}
+{%- macro create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
+    {{ return(adapter.dispatch('create_not_null', 'dbt_constraints')(table_relation, column_names, verify_permissions, quote_columns, lookup_cache, rely_clause)) }}
 {%- endmacro -%}
 
 
@@ -160,65 +160,77 @@
 {%- endmacro -%}
 
 
+{#- This macro that checks if a test has results and whether there were errors -#}
+{%- macro lookup_should_rely(test_unique_id) -%}
+    {%- for res in results
+        if res.node.config.materialized == "test"
+        and res.node.unique_id == test_unique_id -%}
+        {%- if res.failures > 0 -%}
+            {#- Set NORELY if there is a test failure -#}
+            {{ return('NORELY') }}
+        {%- elif res.failures == 0 -%}
+            {#- Set RELY if there are 0 failures -#}
+            {{ return('RELY') }}
+        {%- endif -%}
+    {%- endfor -%}
+    {{ return('') }}
+{%- endmacro -%}
 
 
 {#- This macro is called internally and passed which constraint types to create. -#}
 {%- macro create_constraints_by_type(constraint_types, quote_columns, lookup_cache) -%}
 
-    {#- Loop through the results and find all tests that passed and match the constraint_types -#}
-    {#- Issue #2: added condition that the where config must be empty -#}
-    {%- for res in results
-        if res.node.config.materialized == "test"
-            and res.status in ("pass", "warn")
-            and res.node.test_metadata
-            and res.node.test_metadata.name is in( constraint_types )
-            and ( res.failures == 0 or
-                  res.node.config.get("always_create_constraint", false) )
-            and ( res.node.config.where is none or
-                  res.node.config.get("always_create_constraint", false) )
-            and res.node.config.get("dbt_constraints_enabled", true)  -%}
+    {#- Loop through the metadata and find all tests that match the constraint_types -#}
+    {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
+            if test_model.test_metadata
+            and test_model.test_metadata.name is in( constraint_types )
+            and test_model.config.enabled
+            and test_model.config.get("dbt_constraints_enabled", true) -%}
 
-        {%- set test_model = res.node -%}
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
+        {%- set rely_clause = '' -%}
+        {%- if test_model.config.where -%}
+            {#- Set NORELY if there is a condition on the test -#}
+            {%- set rely_clause = 'NORELY' -%}
+        {%- else -%}
+            {%- set rely_clause = lookup_should_rely(test_model.unique_id) -%}
+        {%- endif -%}
+        {%- set should_generate_constraint = true
+                if ( rely_clause != '' and not test_model.config.where )
+                    or test_model.config.get("always_create_constraint", false)
+                else false -%}
+
         {% set ns = namespace(verify_permissions=false) %}
-
-        {#- Find the table models that are referenced by this test.
-            These models must be physical tables and cannot be sources -#}
         {%- set table_models = [] -%}
-        {%- for node in graph.nodes.values() | selectattr("unique_id", "in", test_model.depends_on.nodes)
-                if node.resource_type in ( ( "model", "snapshot", "seed") )
-                    if node.config.materialized in( ("table", "incremental", "snapshot", "seed") ) -%}
 
-                        {#- Append to our list of models &or snapshots for this test -#}
-                        {%- do table_models.append(node) -%}
+        {#- Find the table models that are referenced by this test. -#}
+        {%- for table_node in test_model.depends_on.nodes -%}
+            {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
+                if node.config.get("materialized", "other") not in ("view", "ephemeral")
+                and ( node.resource_type in ("model", "snapshot", "seed")
+                    or ( node.resource_type == "source" and var('dbt_constraints_sources_enabled', false)
+                        and ( ( var('dbt_constraints_sources_pk_enabled', false) and test_model.test_metadata.name in("primary_key") )
+                            or ( var('dbt_constraints_sources_uk_enabled', false) and test_model.test_metadata.name in("unique_key", "unique_combination_of_columns", "unique") )
+                            or ( var('dbt_constraints_sources_fk_enabled', false) and test_model.test_metadata.name in("foreign_key", "relationships") )
+                            or ( var('dbt_constraints_sources_nn_enabled', false) and test_model.test_metadata.name in("not_null") ) )
+                    ) ) -%}
 
-        {% endfor %}
-
-        {#- Check if we allow constraints on sources overall and for this specific type of constraint -#}
-        {%- if var('dbt_constraints_sources_enabled', false) and (
-                ( var('dbt_constraints_sources_pk_enabled', false) and test_model.test_metadata.name in("primary_key") )
-             or ( var('dbt_constraints_sources_uk_enabled', false) and test_model.test_metadata.name in("unique_key", "unique_combination_of_columns", "unique") )
-             or ( var('dbt_constraints_sources_fk_enabled', false) and test_model.test_metadata.name in("foreign_key", "relationships") )
-             or ( var('dbt_constraints_sources_nn_enabled', false) and test_model.test_metadata.name in("not_null") )
-            ) -%}
-            {%- for node in graph.sources.values()
-                | selectattr("resource_type", "equalto", "source")
-                | selectattr("unique_id", "in", test_model.depends_on.nodes) -%}
-
-                    {%- do node.update({'alias': node.alias or node.name }) -%}
-                    {#- Append to our list of models for this test -#}
-                    {%- do table_models.append(node) -%}
+                {%- do node.update({'alias': node.alias or node.name }) -%}
+                {#- Append to our list of models for this test -#}
+                {%- do table_models.append(node) -%}
+                {%- if node.resource_type == "source" -%}
                     {#- If we are using a sources, we will need to verify permissions -#}
                     {%- set ns.verify_permissions = true -%}
+                {%- endif -%}
 
-            {%- endfor -%}
-        {%- endif -%}
-
+            {% endfor %}
+        {% endfor %}
 
         {#- We only create PK/UK if there is one model referenced by the test
             and if all the columns exist as physical columns on the table -#}
         {%- if 1 == table_models|count
-            and test_model.test_metadata.name in("primary_key", "unique_key", "unique_combination_of_columns", "unique") -%}
+            and test_model.test_metadata.name in("primary_key", "unique_key", "unique_combination_of_columns", "unique")
+            and should_generate_constraint -%}
 
             {# Attempt to identify a parameter we can use for the column names #}
             {%- set column_names = [] -%}
@@ -240,10 +252,10 @@
                 identifier=table_models[0].alias ) -%}
             {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names, lookup_cache) -%}
                 {%- if test_model.test_metadata.name == "primary_key" -%}
-                    {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache) -%}
-                    {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache) -%}
+                    {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
+                    {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                 {%- else  -%}
-                    {%- do dbt_constraints.create_unique_key(table_relation, column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache) -%}
+                    {%- do dbt_constraints.create_unique_key(table_relation, column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                 {%- endif -%}
             {%- else  -%}
                 {%- do log("Skipping primary/unique key because a physical column name was not found on the table: " ~ table_models[0].name ~ " " ~ column_names, info=true) -%}
@@ -252,7 +264,8 @@
         {#- We only create FK if there are two models referenced by the test
             and if all the columns exist as physical columns on the tables -#}
         {%- elif 2 == table_models|count
-            and test_model.test_metadata.name in( "foreign_key", "relationships") -%}
+            and test_model.test_metadata.name in( "foreign_key", "relationships")
+            and should_generate_constraint -%}
 
             {%- set fk_model = none -%}
             {%- set pk_model = none -%}
@@ -317,7 +330,7 @@
                 {%- elif not dbt_constraints.table_columns_all_exist(fk_table_relation, fk_column_names, lookup_cache) -%}
                     {%- do log("Skipping foreign key because a physical column was not found on the fk table: " ~ fk_model.name ~ " " ~ fk_column_names, info=true) -%}
                 {%- else  -%}
-                    {%- do dbt_constraints.create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache) -%}
+                    {%- do dbt_constraints.create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                 {%- endif -%}
             {%- else  -%}
                 {%- do log("Skipping foreign key because a we couldn't find the child table: model=" ~ fk_model_names ~ " or source=" ~ fk_source_names, info=true) -%}
@@ -326,7 +339,8 @@
         {#- We only create NN if there is one model referenced by the test
             and if all the columns exist as physical columns on the table -#}
         {%- elif 1 == table_models|count
-            and test_model.test_metadata.name in("not_null") -%}
+            and test_model.test_metadata.name in("not_null")
+            and should_generate_constraint -%}
 
             {# Attempt to identify a parameter we can use for the column names #}
             {%- set column_names = [] -%}
@@ -348,7 +362,7 @@
                 identifier=table_models[0].alias ) -%}
 
             {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names, lookup_cache) -%}
-                {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache) -%}
+                {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
             {%- else  -%}
                 {%- do log("Skipping not null constraint because a physical column name was not found on the table: " ~ table_models[0].name ~ " " ~ column_names, info=true) -%}
             {%- endif -%}
