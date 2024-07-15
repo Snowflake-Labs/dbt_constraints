@@ -129,7 +129,7 @@ sources:
           # How to validate a compound foreign key
           - relationships:
               column_name: "coalesce(cast(l_partkey as varchar(100)), '') || '~' || coalesce(cast(l_suppkey as varchar(100)), '')"
-              to: source('tpc_h', 'partsupp')
+              to: source('tpc_h', 'source_partsupp')
               field: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
 
           # multi-column FK
