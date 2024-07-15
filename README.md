@@ -47,7 +47,7 @@ vars:
 ```yml
 packages:
   - package: Snowflake-Labs/dbt_constraints
-    version: [">=0.6.0", "<0.7.0"]
+    version: [">=0.7.0", "<0.8.0"]
 # <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag.
 # You can also pull the latest changes from Github with the following:
 #  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
@@ -119,17 +119,22 @@ packages:
 <ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions, lookup_cache=none)
 ```
 
+## RELY and NORELY Properties
+
+Version 0.7.0 introduces the ability to create constraints for failed tests on Snowflake. On Snowflake, executed tests with zero failures are created with the `RELY` property. Failed tests will generate `NORELY` constraints and constraints will be altered to `RELY` or `NORELY` based on subsequent executions of the test. It is also possible to create `NORELY` constraints using `dbt run` and then have those constraints become RELY constraints using `dbt test`.
+
+
 ## dbt_constraints Limitations
 
 Generally, if you don't meet a requirement, tests are still executed but the constraint is skipped rather than producing an error.
 
-* All models involved in a constraint must be materialized as table, incremental, snapshot, or seed.
+* All models involved in a constraint must not be a view or ephemeral materialization.
 
 * If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
 
 * All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 
-* Constraints are not created for failed tests. See how to get around this using severity and `config: always_create_constraint: true` in the next section.
+* Constraints are only created if you execute a test. See how to get around this using `always_create_constraint: true` in the next section.
 
 * `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
 
@@ -139,46 +144,25 @@ Generally, if you don't meet a requirement, tests are still executed but the con
 
 * The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
 
-* Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be skipped when creating constraints. See how to disable this rule using `config: always_create_constraint: true` in the next section.
+* Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be set as `NORELY` when creating constraints.
 
-## Advanced: `config: always_create_constraint: true` property
+* You may need to manually drop a primary key constraint from a table if you change the columns in the constraint. This is not necessary for table materializations or if you do a full-refresh of an incremental model.
 
-There is an advanced option to force a constraint to be generated when there is a `config: where:` property or if the constraint has a threshold. The `config: always_create_constraint: true` property will override those exclusions. When this setting is in effect, you can create constraints even when you have excluded some records or have a number of failures below a threshold. If your test has a status of 'failed', it will still be skipped. Please see [dbt's documentation on how to set a threshold for failures](https://docs.getdbt.com/reference/resource-configs/severity).
+## Advanced: `always_create_constraint: true` Property
+
+There is an advanced option to force a constraint to be generated even when the test was not executed. When this setting is in effect, constraints on Snowflake will have the `NORELY` property until the associated test is executed with zero failures. Snowflake does not support `NORELY` for not null constraints so those constraints will still be skipped. You activate this feature in your dbt_project.yml under the `tests:` section. You can set it to be true for your entire project or you can specify specific folders that should use this feature.
 
 __Caveat Emptor:__
 
 * You will get an error if you try to force constraints to be generated that are enforced by your database. On Snowflake that is only a not_null constraint but on databases like Oracle, all the generated constraints are enforced.
-* This feature could cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination).
+* This feature could cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination). Although executing tests on Snowflake will correctly set the `RELY` or `NORELY` property based on whether the tests pass and fail, activating this feature and skipping the execution of tests will not cause a `RELY` constraint to become a `NORELY` constraint. A `RELY` constraint only becomes a `NORELY` constraint if a test is executed and has failures. If you create a `RELY` constraint by running `dbt build` and subsequently only execute `dbt run` without following up with `dbt test`, you could have constraints that still have the `RELY` property but now have referential integrity issues. Users are encouraged to frequently or always execute their tests so that the `RELY` property is kept up to date.
 
-This is an example using the feature:
+This is an example from a dbt_project.yml using the feature:
 
 ```yml
-  - name: dim_duplicate_orders
-    description: "Test that we do not try to create PK/UK on failed tests"
-    columns:
-      - name: o_orderkey
-        description: "The primary key for this table"
-      - name: o_orderkey_seq
-        description: "duplicate seq column to test UK"
-    tests:
-      # This constraint should be skipped because it has failures
-      - dbt_constraints.primary_key:
-          column_name: o_orderkey
-          config:
-            severity: warn
-      # This constraint should be still generated because always_create_constraint=true
-      - dbt_constraints.unique_key:
-          column_name: o_orderkey
-          config:
-            warn_if: ">= 5000"
-            error_if: ">= 10000"
-            always_create_constraint: true
-      # This constraint should be still generated because always_create_constraint=true
-      - dbt_constraints.unique_key:
-          column_name: o_orderkey_seq
-          config:
-            severity: warn
-            always_create_constraint: true
+tests:
+  your_project_name:
+    +always_create_constraint: true
 ```
 
 ## Primary Maintainers
