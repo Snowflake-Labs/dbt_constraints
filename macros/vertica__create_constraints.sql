@@ -1,5 +1,5 @@
 {# Vertica specific implementation to create a primary key #}
-{%- macro vertica__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+{%- macro vertica__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
@@ -28,7 +28,7 @@
 
 
 {# Vertica specific implementation to create a unique key #}
-{%- macro vertica__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+{%- macro vertica__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
@@ -57,7 +57,7 @@
 
 
 {# Vertica specific implementation to create a foreign key #}
-{%- macro vertica__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache) -%}
+{%- macro vertica__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
     {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
     {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
@@ -91,7 +91,7 @@
 
 
 {# Vertica specific implementation to create a not null constraint #}
-{%- macro vertica__create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache) -%}
+{%- macro vertica__create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
 
     {%- set existing_not_null_col = lookup_cache.not_null_col[table_relation] -%}
 

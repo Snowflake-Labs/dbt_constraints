@@ -1,5 +1,5 @@
 {# Redshift specific implementation to create a primary key #}
-{%- macro redshift__create_primary_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+{%- macro redshift__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
 
     {%- if constraint_name|length > 127 %}
@@ -36,7 +36,7 @@
 
 
 {# Redshift specific implementation to create a unique key #}
-{%- macro redshift__create_unique_key(table_relation, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none) -%}
+{%- macro redshift__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
 
     {%- if constraint_name|length > 127 %}
@@ -71,14 +71,14 @@
 {%- endmacro -%}
 
 {# Redshift specific implementation to create a not null constraint #}
-{%- macro redshift__create_not_null(table_relation, column_names, verify_permissions, quote_columns=false, lookup_cache=none) -%}
+{%- macro redshift__create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
     {%- set columns_list = dbt_constraints.get_quoted_column_list(column_names, quote_columns) -%}
 
     {%- do log("Skipping not null constraint for " ~ columns_list | join(", ") ~ " in " ~ table_relation ~ " because ALTER COLUMN SET NOT NULL is not supported", info=true) -%}
 {%- endmacro -%}
 
 {# Redshift specific implementation to create a foreign key #}
-{%- macro redshift__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns=true, constraint_name=none, lookup_cache=none) -%}
+{%- macro redshift__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
 
     {%- if constraint_name|length > 127 %}
