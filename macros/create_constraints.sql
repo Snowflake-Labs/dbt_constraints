@@ -160,11 +160,61 @@
 {%- endmacro -%}
 
 
+{#- This macro checks if a test or its model is selected -#}
+{%- macro test_selected(test_model) -%}
+
+    {%- if test_model.unique_id in selected_resources
+        or lists_intersect(test_model.depends_on.nodes, selected_resources) -%}
+        {{ return(true) }}
+    {%- endif -%}
+
+    {#- Check if a PK/UK should be created because it is referenced by a selected FK -#}
+    {%- if test_model.test_metadata
+        and test_model.test_metadata.name in ("primary_key", "unique_key", "unique_combination_of_columns", "unique") -%}
+        {%- set pk_test_args = test_model.test_metadata.kwargs -%}
+        {%- set pk_test_columns = [] -%}
+        {%- if pk_test_args.column_names -%}
+            {%- set pk_test_columns =  pk_test_args.column_names -%}
+        {%- elif pk_test_args.combination_of_columns -%}
+            {%- set pk_test_columns =  pk_test_args.combination_of_columns -%}
+        {%- elif pk_test_args.column_name -%}
+            {%- set pk_test_columns =  [pk_test_args.column_name] -%}
+        {%- endif -%}
+        {%- for fk_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
+                if  fk_model.test_metadata
+                and fk_model.test_metadata.name in ("foreign_key", "relationships")
+                and lists_intersect(test_model.depends_on.nodes, fk_model.depends_on.nodes)
+                and ( fk_model.unique_id in selected_resources
+                    or lists_intersect(fk_model.depends_on.nodes, selected_resources) )  -%}
+            {%- set fk_test_args = fk_model.test_metadata.kwargs -%}
+            {%- set fk_test_columns = [] -%}
+            {%- if fk_test_args.pk_column_names -%}
+                {%- set fk_test_columns =  fk_test_args.pk_column_names -%}
+            {%- elif fk_test_args.pk_column_name -%}
+                {%- set fk_test_columns =  [fk_test_args.pk_column_name] -%}
+            {%- elif fk_test_args.field -%}
+                {%- set fk_test_columns =  [fk_test_args.field] -%}
+            {%- endif -%}
+            {%- if column_list_matches(pk_test_columns, fk_test_columns) -%}
+                {{ return(true) }}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endif -%}
+
+    {{ return(false) }}
+{%- endmacro -%}
+
+
 {#- This macro that checks if a test has results and whether there were errors -#}
-{%- macro lookup_should_rely(test_unique_id) -%}
+{%- macro lookup_should_rely(test_model) -%}
+    {%- if test_model.config.where -%}
+        {#- Set NORELY if there is a condition on the test -#}
+        {%- set rely_clause = 'NORELY' -%}
+    {%- endif -%}
+
     {%- for res in results
         if res.node.config.materialized == "test"
-        and res.node.unique_id == test_unique_id -%}
+        and res.node.unique_id == test_model.unique_id -%}
         {%- if res.failures > 0 -%}
             {#- Set NORELY if there is a test failure -#}
             {{ return('NORELY') }}
@@ -188,16 +238,12 @@
             and test_model.config.get("dbt_constraints_enabled", true) -%}
 
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
-        {%- set rely_clause = '' -%}
-        {%- if test_model.config.where -%}
-            {#- Set NORELY if there is a condition on the test -#}
-            {%- set rely_clause = 'NORELY' -%}
-        {%- else -%}
-            {%- set rely_clause = lookup_should_rely(test_model.unique_id) -%}
-        {%- endif -%}
+        {%- set rely_clause = lookup_should_rely(test_model) -%}
+
         {%- set should_generate_constraint = true
                 if ( rely_clause != '' and not test_model.config.where )
-                    or test_model.config.get("always_create_constraint", false)
+                    or (test_model.config.get("always_create_constraint", false)
+                        and test_selected(test_model) )
                 else false -%}
 
         {% set ns = namespace(verify_permissions=false) %}
@@ -421,4 +467,12 @@
     {%- else -%}
         {{ return(false) }}
     {%- endif -%}
+{%- endmacro -%}
+
+{# This macro allows us to compare two lists to see if they intersect #}
+{%- macro lists_intersect(listA, listB) -%}
+    {%- for valueFromA in listA if valueFromA in listB  -%}
+        {{ return(true) }}
+    {% endfor %}
+    {{ return(false) }}
 {%- endmacro -%}

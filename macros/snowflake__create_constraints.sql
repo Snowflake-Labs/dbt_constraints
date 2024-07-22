@@ -7,6 +7,10 @@
 {%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 {%- if constraint_name == existing_constraint -%}
     {%- do set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
+    {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
+        {  "constraint_name": constraint_name,
+            "columns": column_names,
+            "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
 {%- elif none == existing_constraint -%}
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
@@ -44,6 +48,10 @@
 {%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 {%- if constraint_name == existing_constraint -%}
     {%- do set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
+    {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
+        {  "constraint_name": constraint_name,
+            "columns": column_names,
+            "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
 {%- elif none == existing_constraint -%}
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
@@ -84,6 +92,10 @@
         {%- set existing_constraint = dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names, lookup_cache) -%}
         {%- if constraint_name == existing_constraint -%}
             {%- do set_rely_norely(fk_table_relation, constraint_name, lookup_cache.foreign_keys[fk_table_relation][constraint_name].rely, rely_clause) -%}
+            {%- do lookup_cache.foreign_keys.update({fk_table_relation: {constraint_name:
+                {"constraint_name": constraint_name,
+                    "columns": fk_column_names,
+                    "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
         {%- elif none == existing_constraint -%}
 
             {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions, lookup_cache) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions, lookup_cache) -%}
