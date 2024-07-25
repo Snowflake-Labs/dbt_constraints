@@ -137,7 +137,7 @@ Version 1.0.0 introduces a more advanced set of criteria for selecting tests to 
 * `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
 * Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
 * The order of columns on a foreign key test must match between the FK columns and PK columns
-* Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be set as `NORELY` when creating constraints.
+* Referential constraints must apply to all the rows in a table so any tests with a `config: where:`, `config: warn_if:`, or `config: fail_calc:` property will be set as `NORELY` when creating constraints.
 
 Additional notes:
 * The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.

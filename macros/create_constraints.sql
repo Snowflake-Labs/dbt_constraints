@@ -220,9 +220,11 @@
 
 {#- This macro that checks if a test has results and whether there were errors -#}
 {%- macro lookup_should_rely(test_model) -%}
-    {%- if test_model.config.where -%}
+    {%- if test_model.config.where
+            or test_model.config.warn_if != "!= 0"
+            or test_model.config.fail_calc != "count(*)" -%}
         {#- Set NORELY if there is a condition on the test -#}
-        {%- set rely_clause = 'NORELY' -%}
+        {{ return('NORELY') }}
     {%- endif -%}
 
     {%- for res in results
