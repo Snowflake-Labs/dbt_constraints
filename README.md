@@ -121,48 +121,62 @@ packages:
 
 ## RELY and NORELY Properties
 
-Version 0.7.0 introduces the ability to create constraints for failed tests on Snowflake. On Snowflake, executed tests with zero failures are created with the `RELY` property. Failed tests will generate `NORELY` constraints and constraints will be altered to `RELY` or `NORELY` based on subsequent executions of the test. It is also possible to create `NORELY` constraints using `dbt run` and then have those constraints become RELY constraints using `dbt test`.
+Version 1.0.0 introduces the ability to create constraints with the RELY and NORELY properties on Snowflake. Executed tests with zero failures are created with the `RELY` property. Tests with any failures will generate `NORELY` constraints and constraints will be altered to `RELY` or `NORELY` based on subsequent executions of the test. When the `always_create_constraint` feature is enabled, it is now also possible to create `NORELY` constraints using `dbt run` and then have those constraints become RELY constraints using `dbt test`.
 
+## Determining the Constraints to Generate
 
-## dbt_constraints Limitations
+Version 1.0.0 introduces a more advanced set of criteria for selecting tests to turn into constraints.
 
-Generally, if you don't meet a requirement, tests are still executed but the constraint is skipped rather than producing an error.
-
-* All models involved in a constraint must not be a view or ephemeral materialization.
-
+* The test must be one of the following: `primary_key`, `unique_key`, `unique_combination_of_columns`, `unique`, `foreign_key`, `relationships`, or `not_null`
+* The test executed and had zero failures (RELY) or the database has support for NORELY constraints
+* The test executed (RELY/NORELY), we need the primary/unique key constraint for a foreign key, or we have the `always_create_constraint` parameter turned on.
+* If you are using `build`, `run`, or `test` for only part of a project using the `--select` parameter, either the test or its model was selected to run, or the test is a primary/unique key that is needed for a selected foreign key. If a primary/unique key is created for a foreign key, and its test was not executed, the primary/unique key will be created as a NORELY constraint.
+* All models involved in a constraint must **not** be a view or ephemeral materialization. Version 1.0.0 now allows custom materializations.
 * If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
-
 * All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
-
-* Constraints are only created if you execute a test. See how to get around this using `always_create_constraint: true` in the next section.
-
 * `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
-
 * Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
-
 * The order of columns on a foreign key test must match between the FK columns and PK columns
-
-* The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
-
 * Referential constraints must apply to all the rows in a table so any tests with a `config: where:` property will be set as `NORELY` when creating constraints.
 
+Additional notes:
+* The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
 * You may need to manually drop a primary key constraint from a table if you change the columns in the constraint. This is not necessary for table materializations or if you do a full-refresh of an incremental model.
 
-## Advanced: `always_create_constraint: true` Property
+## Advanced: `always_create_constraint` Property
 
-There is an advanced option to force a constraint to be generated even when the test was not executed. When this setting is in effect, constraints on Snowflake will have the `NORELY` property until the associated test is executed with zero failures. Snowflake does not support `NORELY` for not null constraints so those constraints will still be skipped. You activate this feature in your dbt_project.yml under the `tests:` section. You can set it to be true for your entire project or you can specify specific folders that should use this feature.
+There is an advanced option for Snowflake users to force a constraint to be generated even when the test was not executed. When this setting is in effect, constraints on Snowflake will have the `NORELY` property until the associated test is executed with zero failures. Snowflake does not support `NORELY` for not null constraints so those constraints will still be skipped. You activate this feature in your dbt_project.yml under the `models:` or `tests:` sections. You can set it to be true for your entire project or you can specify specific folders that should use this feature. You can also set this in a specific model's header.
 
-__Caveat Emptor:__
+__[Caveat Emptor](https://en.wikipedia.org/wiki/Caveat_emptor):__
 
-* You will get an error if you try to force constraints to be generated that are enforced by your database. On Snowflake that is only a not_null constraint but on databases like Oracle, all the generated constraints are enforced.
-* This feature could cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination). Although executing tests on Snowflake will correctly set the `RELY` or `NORELY` property based on whether the tests pass and fail, activating this feature and skipping the execution of tests will not cause a `RELY` constraint to become a `NORELY` constraint. A `RELY` constraint only becomes a `NORELY` constraint if a test is executed and has failures. If you create a `RELY` constraint by running `dbt build` and subsequently only execute `dbt run` without following up with `dbt test`, you could have constraints that still have the `RELY` property but now have referential integrity issues. Users are encouraged to frequently or always execute their tests so that the `RELY` property is kept up to date.
+* You will get an error if you try to force constraints to be generated that are enforced by your database. On Snowflake that is only a not_null constraint but on databases like Oracle, all the generated constraints are enforced. This is why, at present, only the Snowflake macros implement this feature.
+* This feature can still cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination). Although executing tests on Snowflake will correctly set the `RELY` or `NORELY` property based on whether the tests pass and fail, activating this feature and **skipping the execution of tests** will not cause a `RELY` constraint to become a `NORELY` constraint. A `RELY` constraint only becomes a `NORELY` constraint **if a test is executed** and has failures. If you create a `RELY` constraint by running `dbt build` and subsequently only execute `dbt run` without eventually following up with `dbt test`, you could have constraints that still have the `RELY` property but now have referential integrity issues. Snowflake users are encouraged to frequently or always execute their tests so that the `RELY` property is kept up to date.
 
-This is an example from a dbt_project.yml using the feature:
+These are examples from a dbt_project.yml using the feature in models or tests:
 
 ```yml
+models:
+  your_project_name:
+    +always_create_constraint: true
 tests:
   your_project_name:
     +always_create_constraint: true
+```
+
+This is an example from a model schema.yml using the feature. Setting the property in the `config:` section of a test does not work so you should set it in the model's `config:` section.
+
+```yml
+version: 2
+
+models:
+  - name: your_model_name
+    config:
+      always_create_constraint: true
+```
+
+This is an example of activating the feature in the header of a model:
+```jinja
+{{ config(always_create_constraint = true) }}
 ```
 
 ## Primary Maintainers
