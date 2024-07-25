@@ -1,3 +1,19 @@
+{#- Snowflake supports RELY and NORELY constraints for PK, UK, FK but not not_null -#}
+{%- macro snowflake__adapter_supports_rely_norely(test_name) -%}
+    {%- if test_name in (
+            'primary_key',
+            'unique_key',
+            'unique_combination_of_columns',
+            'unique',
+            'foreign_key',
+            'relationships') -%}
+        {{ return(true) }}
+    {%- else -%}
+        {{ return(false) }}
+    {%- endif -%}
+{%- endmacro -%}
+
+
 {# Snowflake specific implementation to create a primary key #}
 {%- macro snowflake__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
 {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
@@ -130,7 +146,7 @@
 {# Snowflake specific implementation to create a not null constraint #}
 {%- macro snowflake__create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
 {%- if not rely_clause == 'RELY' -%}
-    {%- do log("Skipping not null constraint for " ~ column_names | join(", ") ~ " in " ~ table_relation ~ "  because Snowflake does not support NORELY for not null constraints.", info=false) -%}
+    {%- do log("Skipping not null constraint for " ~ column_names | join(", ") ~ " in " ~ table_relation ~ "  because Snowflake does not support NORELY for not null constraints.", info=true) -%}
     {{ return(false) }}
 {%- endif -%}
 
