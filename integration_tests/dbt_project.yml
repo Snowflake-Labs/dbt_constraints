@@ -50,3 +50,10 @@ seeds:
   +quote_columns: false
   +post-hook: "{{ clone_table('source_') }}"
   #+full_refresh: false
+
+tests:
+  +dbt_constraints_integration_tests:
+    #+always_create_constraint: true
+    # These configuration settings disable running tests or just constraints by path
+    # +enabled: false
+    #+dbt_constraints_enabled: false

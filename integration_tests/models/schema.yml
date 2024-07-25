@@ -152,19 +152,17 @@ models:
           column_name: o_orderkey
           config:
             severity: warn
-      # This constraint can be generated if you uncomment always_create_constraint=true
+
       - dbt_constraints.unique_key:
           column_name: o_orderkey
           config:
             warn_if: ">= 5000"
             error_if: ">= 10000"
-            # always_create_constraint: true
-      # This constraint can be generated if you uncomment always_create_constraint=true
+
       - dbt_constraints.unique_key:
           column_name: o_orderkey_seq
           config:
             severity: warn
-            # always_create_constraint: true
 
   - name: fact_order_line_missing_orders
     description: "Test that we do not create FK on failed tests"
@@ -202,6 +200,8 @@ models:
 
   - name: dim_orders_null_keys
     description: "All Orders"
+    config:
+      always_create_constraint: true
     columns:
       - name: o_custkey
         tests:
@@ -215,9 +215,11 @@ models:
           column_name: o_orderkey
           config:
             severity: warn
+
       # test that we still create this valid unique key
       - dbt_constraints.unique_key:
           column_name: o_orderkey_seq
+
 
   - name: dim_part_supplier
     description: "Multi column UK"
