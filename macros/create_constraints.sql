@@ -300,7 +300,7 @@
             {#- Find the table models that are referenced by this test. -#}
             {%- for table_node in test_model.depends_on.nodes -%}
                 {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-                    if node.config.get("materialized", "other") not in ("view", "ephemeral")
+                    if node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and var('dbt_constraints_sources_enabled', false)
                             and ( ( var('dbt_constraints_sources_pk_enabled', false) and test_name in("primary_key") )
