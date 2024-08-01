@@ -86,8 +86,8 @@
                 AND kc.table_schema = tc.table_schema
                 AND kc.constraint_name = tc.constraint_name
     WHERE tc.constraint_type in ('PRIMARY KEY', 'UNIQUE')
-        AND kc.table_schema ilike '{{table_relation.schema}}'
-        AND kc.table_name ilike '{{table_relation.identifier}}'
+        AND kc.table_schema like '{{table_relation.schema}}'
+        AND kc.table_name like '{{table_relation.identifier}}'
     order by kc.constraint_name
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
@@ -120,8 +120,8 @@
                 AND kc.table_schema = tc.table_schema
                 AND kc.constraint_name = tc.constraint_name
     WHERE tc.constraint_type='FOREIGN KEY'
-        AND kc.table_schema ilike '{{table_relation.schema}}'
-        AND kc.table_name ilike '{{table_relation.identifier}}'
+        AND kc.table_schema like '{{table_relation.schema}}'
+        AND kc.table_name like '{{table_relation.identifier}}'
     order by kc.constraint_name
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
