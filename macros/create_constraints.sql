@@ -104,6 +104,8 @@
 {%- endmacro -%}
 
 
+
+
 {#- Override dbt's truncate_relation macro to allow us to create adapter specific versions that drop constraints -#}
 
 {% macro truncate_relation(relation) -%}
@@ -345,7 +347,9 @@
                     schema=table_models[0].schema,
                     identifier=table_models[0].alias ) -%}
                 {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names, lookup_cache) -%}
-                    {%- if test_name == "primary_key" -%}
+                    {%- if test_name == "primary_key" or (target.type == "bigquery" 
+                            and test_name in("unique_key", "unique_combination_of_columns", "unique"))
+                    -%}
                         {%- if dbt_constraints.adapter_supports_rely_norely("not_null") == true -%}
                             {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
                         {%- endif -%}
