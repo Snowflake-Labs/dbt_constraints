@@ -54,7 +54,7 @@
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names, info=true) -%}
                 {%- set query -%}
                 --Note: ON DELETE not supported in Bigquery
-                ALTER TABLE {{ fk_table_relation }} ADD FOREIGN KEY({{ fk_columns_csv }} ) {{ pk_table_relation }}( {{ pk_columns_csv }} ) NOT ENFORCED
+                ALTER TABLE {{ fk_table_relation }} ADD FOREIGN KEY({{ fk_columns_csv }} ) REFERENCES {{ pk_table_relation }}( {{ pk_columns_csv }} ) NOT ENFORCED
                  {%- endset -%}
                 {%- do run_query(query) -%}
 
