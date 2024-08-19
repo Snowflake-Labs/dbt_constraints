@@ -270,13 +270,13 @@
 
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
         {%- set test_name = test_model.test_metadata.name -%}
-        {%- set selected = test_selected(test_model) -%}
+        {%- set selected = dbt_constraints.test_selected(test_model) -%}
 
         {#- We can shortcut additional tests if the constraint was not selected -#}
         {%- if selected is not none -%}
             {#- rely_clause clause will be RELY if a test passed, NORELY if it failed, and '' if it was skipped -#}
-            {%- set rely_clause = lookup_should_rely(test_model) -%}
-            {%- set always_create_constraint = should_always_create_constraint(test_model) -%}
+            {%- set rely_clause = dbt_constraints.lookup_should_rely(test_model) -%}
+            {%- set always_create_constraint = dbt_constraints.should_always_create_constraint(test_model) -%}
         {%- else -%}
             {%- set rely_clause = '' -%}
             {%- set always_create_constraint = false -%}
@@ -300,7 +300,7 @@
             {#- Find the table models that are referenced by this test. -#}
             {%- for table_node in test_model.depends_on.nodes -%}
                 {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-                    if node.config.get("materialized", "other") not in ("view", "ephemeral")
+                    if node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and var('dbt_constraints_sources_enabled', false)
                             and ( ( var('dbt_constraints_sources_pk_enabled', false) and test_name in("primary_key") )

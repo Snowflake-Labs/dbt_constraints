@@ -22,7 +22,7 @@
 {#- Check that the table does not already have this PK/UK -#}
 {%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 {%- if constraint_name == existing_constraint -%}
-    {%- do set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
+    {%- do dbt_constraints.set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
     {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
         {  "constraint_name": constraint_name,
             "columns": column_names,
@@ -63,7 +63,7 @@
 {#- Check that the table does not already have this PK/UK -#}
 {%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 {%- if constraint_name == existing_constraint -%}
-    {%- do set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
+    {%- do dbt_constraints.set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
     {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
         {  "constraint_name": constraint_name,
             "columns": column_names,
@@ -107,7 +107,7 @@
         {#- Check if the table already has this foreign key -#}
         {%- set existing_constraint = dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names, lookup_cache) -%}
         {%- if constraint_name == existing_constraint -%}
-            {%- do set_rely_norely(fk_table_relation, constraint_name, lookup_cache.foreign_keys[fk_table_relation][constraint_name].rely, rely_clause) -%}
+            {%- do dbt_constraints.set_rely_norely(fk_table_relation, constraint_name, lookup_cache.foreign_keys[fk_table_relation][constraint_name].rely, rely_clause) -%}
             {%- do lookup_cache.foreign_keys.update({fk_table_relation: {constraint_name:
                 {"constraint_name": constraint_name,
                     "columns": fk_column_names,
