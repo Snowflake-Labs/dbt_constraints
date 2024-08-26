@@ -174,10 +174,10 @@
 {#- This macro checks if a test or its model is selected -#}
 {%- macro test_selected(test_model) -%}
 
-    {%- if test_model.unique_id in selected_resources -%}
+    {%- if test_model.unique_id and test_model.unique_id in selected_resources -%}
         {{ return("TEST_SELECTED") }}
     {%- endif -%}
-    {%- if dbt_constraints.lists_intersect(test_model.depends_on.nodes, selected_resources) -%}
+    {%- if test_model.attached_node and test_model.attached_node in selected_resources -%} -%}
         {{ return("MODEL_SELECTED") }}
     {%- endif -%}
 
@@ -196,9 +196,9 @@
         {%- for fk_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
                 if  fk_model.test_metadata
                 and fk_model.test_metadata.name in ("foreign_key", "relationships")
-                and dbt_constraints.lists_intersect(test_model.depends_on.nodes, fk_model.depends_on.nodes)
-                and ( fk_model.unique_id in selected_resources
-                    or dbt_constraints.lists_intersect(fk_model.depends_on.nodes, selected_resources) )  -%}
+                and test_model.attached_node in fk_model.depends_on.nodes
+                and ( (fk_model.unique_id and fk_model.unique_id in selected_resources)
+                    or (fk_model.attached_node and fk_model.attached_node in selected_resources) ) -%}
             {%- set fk_test_args = fk_model.test_metadata.kwargs -%}
             {%- set fk_test_columns = [] -%}
             {%- if fk_test_args.pk_column_names -%}
@@ -362,24 +362,8 @@
             {%- elif 2 == table_models|count
                 and test_name in( "foreign_key", "relationships") -%}
 
-                {%- set fk_model = none -%}
-                {%- set pk_model = none -%}
-                {%- set fk_model_names = modules.re.findall( "(models|snapshots|seeds)\W+(\w+)" , test_model.file_key_name)  -%}
-                {%- set fk_source_names = modules.re.findall( "source\W+(\w+)\W+(\w+)" , test_parameters.model)  -%}
-
-                {%- if 1 == fk_model_names | count -%}
-                    {%- set fk_model = table_models | selectattr("name", "equalto", fk_model_names[0][1]) | first -%}
-                    {%- set pk_model = table_models | rejectattr("name", "equalto", fk_model_names[0][1]) | first -%}
-                {%- elif 1 == fk_source_names | count  -%}
-                    {%- if table_models[0].source_name == fk_source_names[0][0] and table_models[0].name == fk_source_names[0][1] -%}
-                        {%- set fk_model = table_models[0] -%}
-                        {%- set pk_model = table_models[1] -%}
-                    {%- else  -%}
-                        {%- set fk_model = table_models[1] -%}
-                        {%- set pk_model = table_models[0] -%}
-                    {%- endif -%}
-                {%- endif -%}
-                {# {%- set fk_model_name = test_model.file_key_name |replace("models.", "") -%} #}
+                {%- set fk_model = table_models | selectattr("unique_id", "equalto", test_model.attached_node) | first -%}
+                {%- set pk_model = table_models | rejectattr("unique_id", "equalto", test_model.attached_node) | first -%}
 
                 {%- if fk_model and pk_model -%}
 
@@ -428,7 +412,7 @@
                         {%- do dbt_constraints.create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                     {%- endif -%}
                 {%- else  -%}
-                    {%- do log("Skipping foreign key because a we couldn't find the child table: model=" ~ fk_model_names ~ " or source=" ~ fk_source_names, info=true) -%}
+                    {%- do log("Skipping foreign key because a we couldn't find the child table: model=" ~ test_model.attached_node ~ " or source", info=true) -%}
                 {%- endif -%}
 
             {#- We only create NN if there is one model referenced by the test
@@ -517,12 +501,4 @@
     {%- else -%}
         {{ return(false) }}
     {%- endif -%}
-{%- endmacro -%}
-
-{# This macro allows us to compare two lists to see if they intersect #}
-{%- macro lists_intersect(listA, listB) -%}
-    {%- for valueFromA in listA if valueFromA in listB  -%}
-        {{ return(true) }}
-    {% endfor %}
-    {{ return(false) }}
 {%- endmacro -%}
