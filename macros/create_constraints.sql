@@ -229,9 +229,9 @@
     {%- for res in results
         if res.node.config.materialized == "test"
         and res.node.unique_id == test_model.unique_id -%}
-        {%- if not res.failures -%}
-            {#- Set NORELY if we do not know if there is a test failure -#}
-            {{ return('NORELY') }}
+        {%- if res.failures == None -%}
+            {#- Set '' if we do not know if there is a test failure -#}
+            {{ return('') }}
         {%- elif res.failures > 0 -%}
             {#- Set NORELY if there is a test failure -#}
             {{ return('NORELY') }}
