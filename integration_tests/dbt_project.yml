@@ -42,6 +42,8 @@ vars:
   dbt_constraints_sources_uk_enabled: true
   dbt_constraints_sources_fk_enabled: true
 
+on-run-start:
+  - "drop table if exists dim_orders"
 
 models:
   +materialized: table
@@ -52,8 +54,8 @@ seeds:
   #+full_refresh: false
 
 tests:
-  +dbt_constraints_integration_tests:
-    #+always_create_constraint: true
+  dbt_constraints_integration_tests:
+    +always_create_constraint: true
     # These configuration settings disable running tests or just constraints by path
     # +enabled: false
     #+dbt_constraints_enabled: false
