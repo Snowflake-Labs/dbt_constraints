@@ -386,10 +386,17 @@
                         schema=fk_model.schema,
                         identifier=fk_model.alias) -%}
 
-                    {%- set pk_table_relation = adapter.get_relation(
-                        database=pk_model.database,
-                        schema=pk_model.schema,
-                        identifier=pk_model.alias) -%}
+                    {%- if pk_model.unique_id not in selected_resources -%}
+                        {%- set pk_table_relation = adapter.get_relation(
+                            database=(pk_model.config.database or pk_model.database),
+                            schema=(pk_model.config.schema or pk_model.schema),
+                            identifier=(pk_model.config.alias or pk_model.alias)) -%}
+                    {%- else -%}
+                        {%- set pk_table_relation = adapter.get_relation(
+                            database=pk_model.database,
+                            schema=pk_model.schema,
+                            identifier=pk_model.alias) -%}
+                    {%- endif -%}
 
                     {%- if fk_table_relation and pk_table_relation and fk_table_relation.is_table and pk_table_relation.is_table-%}
                         {# Attempt to identify parameters we can use for the column names #}
