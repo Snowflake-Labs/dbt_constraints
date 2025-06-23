@@ -29,6 +29,12 @@ vars:
   # The package can be temporarily disabled using this variable
   dbt_constraints_enabled: true
 
+  # You can control which types of constraints are enabled globally
+  dbt_constraints_pk_enabled: true
+  dbt_constraints_uk_enabled: true
+  dbt_constraints_fk_enabled: true
+  dbt_constraints_nn_enabled: true
+
   # The package can also add constraints on sources if you have sufficient privileges
   dbt_constraints_sources_enabled: false
 

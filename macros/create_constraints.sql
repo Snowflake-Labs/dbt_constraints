@@ -145,25 +145,25 @@
             "not_null_col": { },
             "foreign_keys": { } } -%}
 
-        {%- if 'not_null' in constraint_types -%}
+        {%- if 'not_null' in constraint_types and var('dbt_constraints_nn_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['not_null'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'primary_key' in constraint_types -%}
+        {%- if 'primary_key' in constraint_types and var('dbt_constraints_pk_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['primary_key'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'unique_key' in constraint_types -%}
+        {%- if 'unique_key' in constraint_types and var('dbt_constraints_uk_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['unique_key'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'unique_combination_of_columns' in constraint_types -%}
+        {%- if 'unique_combination_of_columns' in constraint_types and var('dbt_constraints_uk_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['unique_combination_of_columns'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'unique' in constraint_types -%}
+        {%- if 'unique' in constraint_types and var('dbt_constraints_uk_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['unique'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'foreign_key' in constraint_types -%}
+        {%- if 'foreign_key' in constraint_types and var('dbt_constraints_fk_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['foreign_key'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'relationships' in constraint_types -%}
+        {%- if 'relationships' in constraint_types and var('dbt_constraints_fk_enabled', true) -%}
             {%- do dbt_constraints.create_constraints_by_type(['relationships'], quote_columns, lookup_cache) -%}
         {%- endif -%}
 
@@ -358,7 +358,7 @@
                     identifier=table_models[0].alias ) -%}
                 {%- if table_relation and table_relation.is_table -%}
                     {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names, lookup_cache) -%}
-                        {%- if test_name == "primary_key" or (target.type == "bigquery" 
+                        {%- if test_name == "primary_key" or (target.type == "bigquery"
                             and test_name in("unique_key", "unique_combination_of_columns", "unique"))
                         -%}
                             {%- if dbt_constraints.adapter_supports_rely_norely("not_null") == true -%}
