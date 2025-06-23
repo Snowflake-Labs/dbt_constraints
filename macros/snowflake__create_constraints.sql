@@ -152,10 +152,17 @@
 
 {%- set existing_not_null_col = lookup_cache.not_null_col[table_relation] -%}
 
+{# Lookup any columns that are VARIANT, ARRAY, or OBJECT #}
+{%- set semi_structured_cols = adapter.get_columns_in_relation(table_relation)|selectattr("dtype", "in", ('VARIANT', 'ARRAY', 'OBJECT'))|map(attribute='name')|map('upper')|list -%}
+
 {%- set columns_to_change = [] -%}
 {%- for column_name in column_names if column_name not in existing_not_null_col -%}
-    {%- do columns_to_change.append(column_name) -%}
-    {%- do existing_not_null_col.append(column_name) -%}
+    {%- if semi_structured_cols and (column_name | upper) in semi_structured_cols -%}
+        {%- do log("Skipping not null constraint for " ~ column_name ~ " in " ~ table_relation ~ " because Snowflake does not support not null constraints on ARRAY, OBJECT, or VARIANT columns.", info=true) -%}
+    {%- else -%}
+        {%- do columns_to_change.append(column_name) -%}
+        {%- do existing_not_null_col.append(column_name) -%}
+    {%- endif -%}
 {%- endfor -%}
 {%- if columns_to_change|count > 0 -%}
     {%- set columns_list = dbt_constraints.get_quoted_column_list(columns_to_change, quote_columns) -%}
