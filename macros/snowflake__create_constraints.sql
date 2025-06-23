@@ -31,9 +31,10 @@
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
+            {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
             {%- set rely_clause = 'NORELY' if rely_clause == '' else rely_clause -%}
             {%- set query -%}
-            ALTER TABLE {{ table_relation }} ADD CONSTRAINT {{ constraint_name }} PRIMARY KEY ( {{ columns_csv }} ) {{ rely_clause }}
+            ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} ADD CONSTRAINT {{ constraint_name }} PRIMARY KEY ( {{ columns_csv }} ) {{ rely_clause }}
             {%- endset -%}
             {%- do log("Creating primary key: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
             {%- do run_query(query) -%}
@@ -72,9 +73,10 @@
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
+            {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
             {%- set rely_clause = 'NORELY' if rely_clause == '' else rely_clause -%}
             {%- set query -%}
-            ALTER TABLE {{ table_relation }} ADD CONSTRAINT {{ constraint_name }} UNIQUE ( {{ columns_csv }} ) {{ rely_clause }}
+            ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} ADD CONSTRAINT {{ constraint_name }} UNIQUE ( {{ columns_csv }} ) {{ rely_clause }}
             {%- endset -%}
             {%- do log("Creating unique key: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
             {%- do run_query(query) -%}
@@ -116,9 +118,10 @@
 
             {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions, lookup_cache) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions, lookup_cache) -%}
 
+                {%- set ddl_prefix_for_alter = 'ICEBERG' if fk_table_relation.is_iceberg_format else '' -%}
                 {%- set rely_clause = 'NORELY' if rely_clause == '' else rely_clause -%}
                 {%- set query -%}
-                ALTER TABLE {{ fk_table_relation }} ADD CONSTRAINT {{ constraint_name }} FOREIGN KEY ( {{ fk_columns_csv }} ) REFERENCES {{ pk_table_relation }} ( {{ pk_columns_csv }} ) {{ rely_clause }}
+                ALTER {{ ddl_prefix_for_alter }} TABLE {{ fk_table_relation }} ADD CONSTRAINT {{ constraint_name }} FOREIGN KEY ( {{ fk_columns_csv }} ) REFERENCES {{ pk_table_relation }} ( {{ pk_columns_csv }} ) {{ rely_clause }}
                 {%- endset -%}
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names ~ " " ~ rely_clause, info=true) -%}
                 {%- do run_query(query) -%}
@@ -169,13 +172,14 @@
 
     {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
+            {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
                 {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}
-                ALTER TABLE {{ table_relation }} MODIFY {{ modify_statement_csv }};
+                ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} MODIFY {{ modify_statement_csv }};
             {%- endset -%}
             {%- do log("Creating not null constraint for: " ~ columns_to_change | join(", ") ~ " in " ~ table_relation ~ " " ~ rely_clause, info=true) -%}
             {%- do run_query(query) -%}
@@ -197,8 +201,9 @@
 {%- macro set_rely_norely(table_relation, constraint_name, constraint_rely, rely_clause) -%}
     {%- if ( rely_clause == 'NORELY' and constraint_rely == 'true' )
             or ( rely_clause == 'RELY' and constraint_rely == 'false' ) -%}
+        {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
         {%- set query -%}
-        ALTER TABLE {{ table_relation }} MODIFY CONSTRAINT {{ constraint_name }} {{ rely_clause }}
+        ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} MODIFY CONSTRAINT {{ constraint_name }} {{ rely_clause }}
         {%- endset -%}
         {%- do log("Updating constraint: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
         {%- do run_query(query) -%}
