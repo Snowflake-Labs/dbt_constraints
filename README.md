@@ -44,6 +44,9 @@ vars:
   dbt_constraints_sources_uk_enabled: true
   dbt_constraints_sources_fk_enabled: true
   dbt_constraints_sources_nn_enabled: true
+
+  # Enable this parameter if you want to skip using RELY for join elimination
+  dbt_constraints_always_norely: true
 ```
 
 ## Installation

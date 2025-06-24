@@ -223,7 +223,8 @@
 {%- macro lookup_should_rely(test_model) -%}
     {%- if test_model.config.where
             or test_model.config.warn_if != "!= 0"
-            or test_model.config.fail_calc != "count(*)" -%}
+            or test_model.config.fail_calc != "count(*)"
+            or var('dbt_constraints_always_norely', false) -%}
         {#- Set NORELY if there is a condition on the test -#}
         {{ return('NORELY') }}
     {%- endif -%}
