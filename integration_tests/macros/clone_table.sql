@@ -1,5 +1,7 @@
 {%- macro clone_table(new_prefix) -%}
+    {%- if flags.WHICH == 'seed' and execute -%}
     {{ return(adapter.dispatch('clone_table')(new_prefix)) }}
+    {%- endif -%}
 {%- endmacro -%}
 
 
@@ -27,12 +29,12 @@
     {%- set clone_statement -%}
     drop table if exists {{table_clone}}
     {%- endset -%}
-    {%- do log("Drop table if exists: " ~ table_clone, info=false) -%}
+    {%- do log("Drop table if exists: " ~ table_clone, info=true) -%}
 
     {%- set clone_statement -%}
-    create table {{table_clone}} as select * from {{this}}
+    create table if not exists {{table_clone}} as select * from {{this}}
     {%- endset -%}
-    {%- do log("Creating table clone: " ~ table_clone, info=false) -%}
+    {%- do log("Creating table clone: " ~ table_clone, info=true) -%}
     {%- do run_query(clone_statement) -%}
 
 {%- endmacro -%}

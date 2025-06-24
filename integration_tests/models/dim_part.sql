@@ -6,5 +6,14 @@
 
 SELECT
     P.*,
+    {% if target.type == 'snowflake' %}
+    ['Test value']::ARRAY AS TEST_ARRAY_COL,
+    {'Test key': 'Test value'}::OBJECT AS TEST_OBJECT_COL,
+    {'Test key': 'Test value'}::VARIANT AS TEST_VARIANT_COL,
+    {% else %}
+    'Test value' AS TEST_ARRAY_COL,
+    'Test value' AS TEST_OBJECT_COL,
+    'Test value' AS TEST_VARIANT_COL,
+    {% endif %}
     DENSE_RANK() over (order by p_partkey) as p_partkey_seq
 FROM {{ ref('part') }} P
