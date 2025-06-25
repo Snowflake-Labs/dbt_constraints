@@ -15,5 +15,6 @@ SELECT
     'Test value' AS TEST_OBJECT_COL,
     'Test value' AS TEST_VARIANT_COL,
     {% endif %}
+    P.p_partkey AS "TitleCasePartKey",
     DENSE_RANK() over (order by p_partkey) as p_partkey_seq
 FROM {{ ref('part') }} P

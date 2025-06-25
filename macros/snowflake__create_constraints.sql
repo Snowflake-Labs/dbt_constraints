@@ -16,7 +16,7 @@
 
 {# Snowflake specific implementation to create a primary key #}
 {%- macro snowflake__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-{%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
+{%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper | replace('"', '') -%}
 {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
 {#- Check that the table does not already have this PK/UK -#}
@@ -58,7 +58,7 @@
 
 {# Snowflake specific implementation to create a unique key #}
 {%- macro snowflake__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-{%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
+{%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper | replace('"', '') -%}
 {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
 {#- Check that the table does not already have this PK/UK -#}
@@ -100,7 +100,7 @@
 
 {# Snowflake specific implementation to create a foreign key #}
 {%- macro snowflake__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-{%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
+{%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper | replace('"', '') -%}
 {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
 {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
 
@@ -156,11 +156,11 @@
 {%- set existing_not_null_col = lookup_cache.not_null_col[table_relation] -%}
 
 {# Lookup any columns that are VARIANT, ARRAY, or OBJECT #}
-{%- set semi_structured_cols = adapter.get_columns_in_relation(table_relation)|selectattr("dtype", "in", ('VARIANT', 'ARRAY', 'OBJECT'))|map(attribute='name')|map('upper')|list -%}
+{%- set semi_structured_cols = lookup_cache.semi_structured_col[table_relation] -%}
 
 {%- set columns_to_change = [] -%}
 {%- for column_name in column_names if column_name not in existing_not_null_col -%}
-    {%- if semi_structured_cols and (column_name | upper) in semi_structured_cols -%}
+    {%- if (column_name | upper) in semi_structured_cols -%}
         {%- do log("Skipping not null constraint for " ~ column_name ~ " in " ~ table_relation ~ " because Snowflake does not support not null constraints on ARRAY, OBJECT, or VARIANT columns.", info=true) -%}
     {%- else -%}
         {%- do columns_to_change.append(column_name) -%}
@@ -387,19 +387,24 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
 {%- if table_relation not in lookup_cache.table_columns -%}
         {%- set lookup_query -%}
         SHOW COLUMNS IN TABLE {{ table_relation }}
+        ->> select "column_name", TRY_TO_BOOLEAN("null?") as "nullable", parse_json("data_type"):type::varchar as "type" from $1
         {%- endset -%}
         {%- set results = run_query(lookup_query) -%}
-
         {%- set not_null_col = [] -%}
+        {%- set semi_structured_col = [] -%}
         {%- set upper_column_list = [] -%}
         {%- for row in results.rows -%}
             {%- do upper_column_list.append(row["column_name"]|upper) -%}
-            {%- if row['null?'] == 'false' -%}
+            {%- if row['nullable'] == true -%}
                 {%- do not_null_col.append(row["column_name"]|upper) -%}
+            {%- endif -%}
+            {%- if row['type'] in ('VARIANT', 'ARRAY', 'OBJECT') -%}
+                {%- do semi_structured_col.append(row["column_name"]|upper) -%}
             {%- endif -%}
         {%- endfor -%}
         {%- do lookup_cache.table_columns.update({ table_relation: upper_column_list }) -%}
         {%- do lookup_cache.not_null_col.update({ table_relation: not_null_col }) -%}
+        {%- do lookup_cache.semi_structured_col.update({ table_relation: semi_structured_col }) -%}
     {%- endif -%}
 {{ return(lookup_cache.table_columns[table_relation]) }}
 

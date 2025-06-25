@@ -32,6 +32,11 @@ models:
         description: "Test that we don't create not null contraints on variant columns"
         tests:
           - not_null
+      - name: TitleCasePartKey
+        quote: true
+        tests:
+          - not_null
+          - dbt_constraints.unique_key
     tests:
       - dbt_constraints.unique_key:
           column_name: p_partkey

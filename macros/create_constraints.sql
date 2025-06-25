@@ -143,6 +143,7 @@
             "table_privileges": { },
             "unique_keys": { },
             "not_null_col": { },
+            "semi_structured_col": { },
             "foreign_keys": { } } -%}
 
         {%- if 'not_null' in constraint_types and var('dbt_constraints_nn_enabled', true) -%}
@@ -498,12 +499,11 @@
 {# This macro tests that all the column names passed to the macro can be found on the table, ignoring case #}
 {%- macro table_columns_all_exist(table_relation, column_list, lookup_cache) -%}
     {%- set tab_column_list = dbt_constraints.lookup_table_columns(table_relation, lookup_cache) -%}
-
-    {%- for column in column_list|map('upper') if column not in tab_column_list -%}
+    {%- set check_columns = column_list|map('upper')|map('trim', '"')|list -%}
+    {%- for column in check_columns if column not in tab_column_list -%}
         {{ return(false) }}
     {%- endfor -%}
     {{ return(true) }}
-
 {%- endmacro -%}
 
 
@@ -518,7 +518,7 @@
 
         {%- set tab_column_list = [] -%}
         {%- for column in tab_Columns -%}
-            {{ tab_column_list.append(column.name|upper) }}
+            {{ tab_column_list.append(column.name|upper|trim('"')) }}
         {%- endfor -%}
         {%- do lookup_cache.table_columns.update({ table_relation: tab_column_list }) -%}
     {%- endif -%}
@@ -528,11 +528,13 @@
 
 {# This macro allows us to compare two sets of columns to see if they are the same, ignoring case #}
 {%- macro column_list_matches(listA, listB) -%}
+    {%- set testListA = listA | map('upper') | map('trim', '"') | list -%}
+    {%- set testListB = listB | map('upper') | map('trim', '"') | list -%}
     {# Test if A is empty or the lists are not the same size #}
     {%- if listA | count > 0 and listA | count == listB | count  -%}
         {# Fail if there are any columns in A that are not in B #}
-        {%- for valueFromA in listA|map('upper') -%}
-            {%- if valueFromA|upper not in listB| map('upper')  -%}
+        {%- for valueFromA in testListA -%}
+            {%- if valueFromA not in testListB  -%}
                 {{ return(false) }}
             {%- endif -%}
         {% endfor %}
