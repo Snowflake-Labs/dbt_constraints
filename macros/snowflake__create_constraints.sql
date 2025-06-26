@@ -16,18 +16,12 @@
 
 {# Snowflake specific implementation to create a primary key #}
 {%- macro snowflake__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-{%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper | replace('"', '') -%}
-{%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper | replace('"', '') -%}
+    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
-{#- Check that the table does not already have this PK/UK -#}
-{%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
-{%- if constraint_name == existing_constraint -%}
-    {%- do dbt_constraints.set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
-    {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
-        {  "constraint_name": constraint_name,
-            "columns": column_names,
-            "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
-{%- elif none == existing_constraint -%}
+    {#- Check that the table does not already have this PK/UK -#}
+    {%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
+    {%- if none == existing_constraint -%}
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
@@ -39,10 +33,9 @@
             {%- do log("Creating primary key: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
             {%- do run_query(query) -%}
             {#- Add this constraint to the lookup cache -#}
-            {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
-                {  "constraint_name": constraint_name,
-                   "columns": column_names,
-                   "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
+            {%- do lookup_cache.unique_keys[table_relation].update( {constraint_name:
+                {   "columns": column_names,
+                    "rely": "true" if rely_clause == "RELY" else "false" } } ) -%}
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
         {%- endif -%}
@@ -58,18 +51,12 @@
 
 {# Snowflake specific implementation to create a unique key #}
 {%- macro snowflake__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-{%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper | replace('"', '') -%}
-{%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper | replace('"', '') -%}
+    {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
-{#- Check that the table does not already have this PK/UK -#}
-{%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
-{%- if constraint_name == existing_constraint -%}
-    {%- do dbt_constraints.set_rely_norely(table_relation, constraint_name, lookup_cache.unique_keys[table_relation][constraint_name].rely, rely_clause) -%}
-    {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
-        {  "constraint_name": constraint_name,
-            "columns": column_names,
-            "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
-{%- elif none == existing_constraint -%}
+    {#- Check that the table does not already have this PK/UK -#}
+    {%- set existing_constraint = dbt_constraints.unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
+    {%- if none == existing_constraint -%}
 
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 
@@ -81,10 +68,9 @@
             {%- do log("Creating unique key: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
             {%- do run_query(query) -%}
             {#- Add this constraint to the lookup cache -#}
-            {%- do lookup_cache.unique_keys.update({table_relation: {constraint_name:
-                {  "constraint_name": constraint_name,
-                   "columns": column_names,
-                   "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
+            {%- do lookup_cache.unique_keys[table_relation].update( {constraint_name:
+                {   "columns": column_names,
+                    "rely": "true" if rely_clause == "RELY" else "false" } } ) -%}
 
         {%- else -%}
             {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
@@ -108,13 +94,7 @@
 {%- if none != dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names, lookup_cache) -%}
         {#- Check if the table already has this foreign key -#}
         {%- set existing_constraint = dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names, lookup_cache) -%}
-        {%- if constraint_name == existing_constraint -%}
-            {%- do dbt_constraints.set_rely_norely(fk_table_relation, constraint_name, lookup_cache.foreign_keys[fk_table_relation][constraint_name].rely, rely_clause) -%}
-            {%- do lookup_cache.foreign_keys.update({fk_table_relation: {constraint_name:
-                {"constraint_name": constraint_name,
-                    "columns": fk_column_names,
-                    "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
-        {%- elif none == existing_constraint -%}
+        {%- if none == existing_constraint -%}
 
             {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions, lookup_cache) and dbt_constraints.have_references_priv(pk_table_relation, verify_permissions, lookup_cache) -%}
 
@@ -126,10 +106,9 @@
                 {%- do log("Creating foreign key: " ~ constraint_name ~ " referencing " ~ pk_table_relation.identifier ~ " " ~ pk_column_names ~ " " ~ rely_clause, info=true) -%}
                 {%- do run_query(query) -%}
                 {#- Add this constraint to the lookup cache -#}
-                {%- do lookup_cache.foreign_keys.update({fk_table_relation: {constraint_name:
-                    {"constraint_name": constraint_name,
-                     "columns": fk_column_names,
-                     "rely": "true" if rely_clause == "RELY" else "false" } } }) -%}
+                {%- do lookup_cache.foreign_keys[fk_table_relation].update( {constraint_name:
+                    {   "columns": fk_column_names,
+                        "rely": "true" if rely_clause == "RELY" else "false" } } ) -%}
 
             {%- else -%}
                 {%- do log("Skipping " ~ constraint_name ~ " because of insufficient privileges: " ~ fk_table_relation ~ " referencing " ~ pk_table_relation, info=true) -%}
@@ -216,14 +195,17 @@
 {%- macro snowflake__unique_constraint_exists(table_relation, column_names, lookup_cache) -%}
 {#- Check if we can find this constraint in the lookup cache -#}
 {%- if table_relation in lookup_cache.unique_keys -%}
-    {%- set cached_unique_keys = lookup_cache.unique_keys[table_relation] -%}
-    {%- for cached_val in cached_unique_keys.values() -%}
+    {%- for constraint_name, cached_val in lookup_cache.unique_keys[table_relation].items() -%}
         {%- if dbt_constraints.column_list_matches(cached_val.columns, column_names ) -%}
-            {%- do log("Found UK key: " ~ table_relation ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
-            {{ return(cached_val.constraint_name) }}
+            {%- do log("Found UK key: " ~ table_relation ~ " " ~ constraint_name ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
+            {{ return(constraint_name) }}
         {%- endif -%}
     {% endfor %}
+    {{ return(none) }}
 {%- endif -%}
+
+{#- We didn't find a cache entry for this table so we will lookup existing constraints in DB -#}
+{%- do lookup_cache.unique_keys.update({table_relation: {}}) -%}
 
 {%- set lookup_query -%}
 SHOW UNIQUE KEYS IN TABLE {{ table_relation }}
@@ -235,14 +217,9 @@ SHOW UNIQUE KEYS IN TABLE {{ table_relation }}
         {%- set existing_columns = constraint.columns["column_name"].values() -%}
         {%- set existing_rely = (constraint.columns["rely"].values() | first) -%}
         {#- Add this constraint to the lookup cache -#}
-        {%- do lookup_cache.unique_keys.update({table_relation: {existing_constraint_name:
-            {  "constraint_name": existing_constraint_name,
-                "columns": existing_columns,
-                "rely": existing_rely } } }) -%}
-        {%- if dbt_constraints.column_list_matches(existing_columns, column_names ) -%}
-            {%- do log("Found UK key: " ~ existing_constraint_name ~ " " ~ table_relation ~ " " ~ column_names ~ " " ~ existing_rely, info=false) -%}
-            {{ return(existing_constraint_name) }}
-        {%- endif -%}
+        {%- do lookup_cache.unique_keys[table_relation].update( {existing_constraint_name:
+            {   "columns": existing_columns,
+                "rely": existing_rely } }) -%}
     {% endfor %}
 {%- endif -%}
 
@@ -256,16 +233,19 @@ SHOW PRIMARY KEYS IN TABLE {{ table_relation }}
         {%- set existing_columns = constraint.columns["column_name"].values() -%}
         {%- set existing_rely = (constraint.columns["rely"].values() | first) -%}
         {#- Add this constraint to the lookup cache -#}
-        {%- do lookup_cache.unique_keys.update({table_relation: {existing_constraint_name:
-            {  "constraint_name": existing_constraint_name,
-                "columns": existing_columns,
-                "rely": existing_rely } } }) -%}
-        {%- if dbt_constraints.column_list_matches(existing_columns, column_names ) -%}
-            {%- do log("Found PK key: " ~ existing_constraint_name ~ " " ~ table_relation ~ " " ~ column_names ~ " " ~ existing_rely, info=false) -%}
-            {{ return(existing_constraint_name) }}
-        {%- endif -%}
+        {%- do lookup_cache.unique_keys[table_relation].update( {existing_constraint_name:
+            {   "columns": existing_columns,
+                "rely": existing_rely } }) -%}
     {% endfor %}
 {%- endif -%}
+
+{#- check again in lookup cache -#}
+{%- for constraint_name, cached_val in lookup_cache.unique_keys[table_relation].items() -%}
+    {%- if dbt_constraints.column_list_matches(cached_val.columns, column_names ) -%}
+        {%- do log("Found UK key: " ~ table_relation ~ " " ~ constraint_name ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
+        {{ return(constraint_name) }}
+    {%- endif -%}
+{% endfor %}
 
 {#- If we get this far then the table does not have either constraint -#}
 {%- do log("No PK/UK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
@@ -279,14 +259,17 @@ SHOW PRIMARY KEYS IN TABLE {{ table_relation }}
 
 {#- Check if we can find this constraint in the lookup cache -#}
 {%- if table_relation in lookup_cache.foreign_keys -%}
-    {%- set cached_foreign_keys = lookup_cache.foreign_keys[table_relation] -%}
-    {%- for cached_val in cached_foreign_keys.values() -%}
+    {%- for constraint_name, cached_val in lookup_cache.foreign_keys[table_relation].items() -%}
         {%- if dbt_constraints.column_list_matches(cached_val.columns, column_names ) -%}
-            {%- do log("Found FK key: " ~ table_relation ~ " " ~ cached_val.constraint_name ~ " " ~ column_names ~ " " ~ cached_val.rely, info=false) -%}
+            {%- do log("Found FK key: " ~ table_relation ~ " " ~ constraint_name ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
             {{ return(cached_val.constraint_name) }}
         {%- endif -%}
     {% endfor %}
+    {{ return(none) }}
 {%- endif -%}
+
+{#- We didn't find a cache entry for this table so we will lookup existing constraints in DB -#}
+{%- do lookup_cache.foreign_keys.update({table_relation: {}}) -%}
 
 {%- set lookup_query -%}
 SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
@@ -298,16 +281,19 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
         {%- set existing_columns = constraint.columns["fk_column_name"].values() -%}
         {%- set existing_rely = (constraint.columns["rely"].values() | first) -%}
         {#- Add this constraint to the lookup cache -#}
-        {%- do lookup_cache.foreign_keys.update({table_relation: {existing_constraint_name:
-            {  "constraint_name": existing_constraint_name,
-                "columns": existing_columns,
-                "rely": existing_rely } } }) -%}
-        {%- if dbt_constraints.column_list_matches(existing_columns, column_names ) -%}
-            {%- do log("Found FK key: " ~ table_relation ~ " " ~ existing_constraint_name ~ " " ~ column_names ~ " " ~ existing_rely, info=false) -%}
-            {{ return(existing_constraint_name) }}
-        {%- endif -%}
+        {%- do lookup_cache.foreign_keys[table_relation].update( {existing_constraint_name:
+            {   "columns": existing_columns,
+                "rely": existing_rely } }) -%}
     {% endfor %}
 {%- endif -%}
+
+{#- check again in lookup cache -#}
+{%- for constraint_name, cached_val in lookup_cache.foreign_keys[table_relation].items() -%}
+    {%- if dbt_constraints.column_list_matches(cached_val.columns, column_names ) -%}
+        {%- do log("Found FK key: " ~ table_relation ~ " " ~ constraint_name ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
+        {{ return(cached_val.constraint_name) }}
+    {%- endif -%}
+{% endfor %}
 
 {#- If we get this far then the table does not have this constraint -#}
 {%- do log("No FK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
@@ -383,11 +369,9 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
 
 
 {%- macro snowflake__lookup_table_columns(table_relation, lookup_cache) -%}
-
-{%- if table_relation not in lookup_cache.table_columns -%}
+    {%- if table_relation not in lookup_cache.table_columns -%}
         {%- set lookup_query -%}
         SHOW COLUMNS IN TABLE {{ table_relation }}
-        ->> select "column_name", TRY_TO_BOOLEAN("null?") as "nullable", parse_json("data_type"):type::varchar as "type" from $1
         {%- endset -%}
         {%- set results = run_query(lookup_query) -%}
         {%- set not_null_col = [] -%}
@@ -395,17 +379,19 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
         {%- set upper_column_list = [] -%}
         {%- for row in results.rows -%}
             {%- do upper_column_list.append(row["column_name"]|upper) -%}
-            {%- if row['nullable'] == true -%}
+            {%- if row['null?'] == true -%}
                 {%- do not_null_col.append(row["column_name"]|upper) -%}
             {%- endif -%}
-            {%- if row['type'] in ('VARIANT', 'ARRAY', 'OBJECT') -%}
-                {%- do semi_structured_col.append(row["column_name"]|upper) -%}
+            {%- if row['data_type'] is string -%}
+                {%- set data_type = fromjson( row['data_type'] ) -%}
+                {%- if data_type["type"] in ('VARIANT', 'ARRAY', 'OBJECT') -%}
+                    {%- do semi_structured_col.append(row["column_name"]|upper) -%}
+                {%- endif -%}
             {%- endif -%}
         {%- endfor -%}
         {%- do lookup_cache.table_columns.update({ table_relation: upper_column_list }) -%}
         {%- do lookup_cache.not_null_col.update({ table_relation: not_null_col }) -%}
         {%- do lookup_cache.semi_structured_col.update({ table_relation: semi_structured_col }) -%}
     {%- endif -%}
-{{ return(lookup_cache.table_columns[table_relation]) }}
-
+    {{ return(lookup_cache.table_columns[table_relation]) }}
 {%- endmacro -%}
