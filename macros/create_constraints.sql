@@ -135,7 +135,7 @@
             'relationships',
             'not_null'],
         quote_columns=false) -%}
-    {%- if execute and var('dbt_constraints_enabled', false) and results -%}
+    {%- if execute and var('dbt_constraints_enabled', "false")|string|lower == "true" and results -%}
         {%- do log("Running dbt Constraints", info=true) -%}
 
         {%- set lookup_cache = {
@@ -143,27 +143,28 @@
             "table_privileges": { },
             "unique_keys": { },
             "not_null_col": { },
+            "semi_structured_col": { },
             "foreign_keys": { } } -%}
 
-        {%- if 'not_null' in constraint_types and var('dbt_constraints_nn_enabled', true) -%}
+        {%- if 'not_null' in constraint_types and var('dbt_constraints_nn_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['not_null'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'primary_key' in constraint_types and var('dbt_constraints_pk_enabled', true) -%}
+        {%- if 'primary_key' in constraint_types and var('dbt_constraints_pk_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['primary_key'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'unique_key' in constraint_types and var('dbt_constraints_uk_enabled', true) -%}
+        {%- if 'unique_key' in constraint_types and var('dbt_constraints_uk_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['unique_key'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'unique_combination_of_columns' in constraint_types and var('dbt_constraints_uk_enabled', true) -%}
+        {%- if 'unique_combination_of_columns' in constraint_types and var('dbt_constraints_uk_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['unique_combination_of_columns'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'unique' in constraint_types and var('dbt_constraints_uk_enabled', true) -%}
+        {%- if 'unique' in constraint_types and var('dbt_constraints_uk_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['unique'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'foreign_key' in constraint_types and var('dbt_constraints_fk_enabled', true) -%}
+        {%- if 'foreign_key' in constraint_types and var('dbt_constraints_fk_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['foreign_key'], quote_columns, lookup_cache) -%}
         {%- endif -%}
-        {%- if 'relationships' in constraint_types and var('dbt_constraints_fk_enabled', true) -%}
+        {%- if 'relationships' in constraint_types and var('dbt_constraints_fk_enabled', "true")|string|lower == "true" -%}
             {%- do dbt_constraints.create_constraints_by_type(['relationships'], quote_columns, lookup_cache) -%}
         {%- endif -%}
 
@@ -248,12 +249,12 @@
 
 {#- This macro that checks if a test or its model has always_create_constraint set -#}
 {%- macro should_always_create_constraint(test_model) -%}
-    {%- if test_model.config.get("always_create_constraint", false) == true -%}
+    {%- if test_model.config.get("always_create_constraint", "false")|string|lower == "true" -%}
         {{ return(true) }}
     {%- endif -%}
     {%- for table_node in test_model.depends_on.nodes -%}
         {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-            if node.config.get("always_create_constraint", false) == true -%}
+            if node.config.get("always_create_constraint", "false")|string|lower == "true" -%}
             {{ return(true) }}
         {%- endfor -%}
     {%- endfor -%}
@@ -264,6 +265,14 @@
 
 {#- This macro is called internally and passed which constraint types to create. -#}
 {%- macro create_constraints_by_type(constraint_types, quote_columns, lookup_cache) -%}
+
+    {#- Global settings -#}
+    {%- set dbt_constraints_sources_enabled = var('dbt_constraints_sources_enabled', "false")|string|lower == "true" %}
+    {%- set dbt_constraints_sources_pk_enabled = var('dbt_constraints_sources_pk_enabled', "false")|string|lower == "true" %}
+    {%- set dbt_constraints_sources_uk_enabled = var('dbt_constraints_sources_uk_enabled', "false")|string|lower == "true" %}
+    {%- set dbt_constraints_sources_fk_enabled = var('dbt_constraints_sources_fk_enabled', "false")|string|lower == "true" %}
+    {%- set dbt_constraints_sources_nn_enabled = var('dbt_constraints_sources_nn_enabled', "false")|string|lower == "true" %}
+    {%- set dbt_constraints_always_norely = var('dbt_constraints_always_norely', "false")|string|lower == "true" %}
 
     {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests -#}
     {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
@@ -277,14 +286,18 @@
             and test_model.depends_on.nodes
             and test_model.config
             and test_model.config.enabled
-            and test_model.config.get("dbt_constraints_enabled", true) -%}
+            and test_model.config.get("dbt_constraints_enabled", "true")|string|lower == "true" -%}
 
         {%- set test_parameters = test_model.test_metadata.kwargs -%}
         {%- set test_name = test_model.test_metadata.name -%}
         {%- set selected = dbt_constraints.test_selected(test_model) -%}
 
         {#- We can shortcut additional tests if the constraint was not selected -#}
-        {%- if selected is not none -%}
+        {%- if selected is not none and dbt_constraints_always_norely -%}
+            {#- We can skip checking for NORELY if we always NORELY -#}
+            {%- set rely_clause = 'NORELY' -%}
+            {%- set always_create_constraint = dbt_constraints.should_always_create_constraint(test_model) -%}
+        {%- elif selected is not none -%}
             {#- rely_clause clause will be RELY if a test passed, NORELY if it failed, and '' if it was skipped -#}
             {%- set rely_clause = dbt_constraints.lookup_should_rely(test_model) -%}
             {%- set always_create_constraint = dbt_constraints.should_always_create_constraint(test_model) -%}
@@ -314,11 +327,11 @@
                     if node.config
                     and node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
                     and ( node.resource_type in ("model", "snapshot", "seed")
-                        or ( node.resource_type == "source" and var('dbt_constraints_sources_enabled', false)
-                            and ( ( var('dbt_constraints_sources_pk_enabled', false) and test_name in("primary_key") )
-                                or ( var('dbt_constraints_sources_uk_enabled', false) and test_name in("unique_key", "unique_combination_of_columns", "unique") )
-                                or ( var('dbt_constraints_sources_fk_enabled', false) and test_name in("foreign_key", "relationships") )
-                                or ( var('dbt_constraints_sources_nn_enabled', false) and test_name in("not_null") ) )
+                        or ( node.resource_type == "source" and dbt_constraints_sources_enabled
+                            and ( ( dbt_constraints_sources_pk_enabled and test_name in("primary_key") )
+                                or ( dbt_constraints_sources_uk_enabled and test_name in("unique_key", "unique_combination_of_columns", "unique") )
+                                or ( dbt_constraints_sources_fk_enabled and test_name in("foreign_key", "relationships") )
+                                or ( dbt_constraints_sources_nn_enabled and test_name in("not_null") ) )
                         ) ) -%}
 
                     {%- do node.update({'alias': node.alias or node.name }) -%}
@@ -497,12 +510,11 @@
 {# This macro tests that all the column names passed to the macro can be found on the table, ignoring case #}
 {%- macro table_columns_all_exist(table_relation, column_list, lookup_cache) -%}
     {%- set tab_column_list = dbt_constraints.lookup_table_columns(table_relation, lookup_cache) -%}
-
-    {%- for column in column_list|map('upper') if column not in tab_column_list -%}
+    {%- set check_columns = column_list|map('upper')|map('trim', '"')|list -%}
+    {%- for column in check_columns if column not in tab_column_list -%}
         {{ return(false) }}
     {%- endfor -%}
     {{ return(true) }}
-
 {%- endmacro -%}
 
 
@@ -517,7 +529,7 @@
 
         {%- set tab_column_list = [] -%}
         {%- for column in tab_Columns -%}
-            {{ tab_column_list.append(column.name|upper) }}
+            {{ tab_column_list.append(column.name|upper|trim('"')) }}
         {%- endfor -%}
         {%- do lookup_cache.table_columns.update({ table_relation: tab_column_list }) -%}
     {%- endif -%}
@@ -527,11 +539,13 @@
 
 {# This macro allows us to compare two sets of columns to see if they are the same, ignoring case #}
 {%- macro column_list_matches(listA, listB) -%}
+    {%- set testListA = listA | map('upper') | map('trim', '"') | list -%}
+    {%- set testListB = listB | map('upper') | map('trim', '"') | list -%}
     {# Test if A is empty or the lists are not the same size #}
     {%- if listA | count > 0 and listA | count == listB | count  -%}
         {# Fail if there are any columns in A that are not in B #}
-        {%- for valueFromA in listA|map('upper') -%}
-            {%- if valueFromA|upper not in listB| map('upper')  -%}
+        {%- for valueFromA in testListA -%}
+            {%- if valueFromA not in testListB  -%}
                 {{ return(false) }}
             {%- endif -%}
         {% endfor %}

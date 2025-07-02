@@ -1,6 +1,6 @@
 {# Vertica specific implementation to create a primary key #}
 {%- macro vertica__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper | replace('"', '') -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
@@ -29,7 +29,7 @@
 
 {# Vertica specific implementation to create a unique key #}
 {%- macro vertica__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper | replace('"', '') -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
@@ -58,7 +58,7 @@
 
 {# Vertica specific implementation to create a foreign key #}
 {%- macro vertica__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
+    {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper | replace('"', '') -%}
     {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
     {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
     {#- Check that the PK table has a PK or UK -#}

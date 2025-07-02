@@ -1,6 +1,6 @@
 {# Oracle specific implementation to create a primary key #}
 {%- macro oracle__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper | replace('"', '') -%}
 
     {%- if constraint_name|length > 30 %}
         {%- set constraint_name_query %}
@@ -43,7 +43,7 @@ END;
 
 {# Oracle specific implementation to create a unique key #}
 {%- macro oracle__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper -%}
+    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper | replace('"', '') -%}
 
     {%- if constraint_name|length > 30 %}
         {%- set constraint_name_query %}
@@ -86,7 +86,7 @@ END;
 
 {# Oracle specific implementation to create a foreign key #}
 {%- macro oracle__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper -%}
+    {%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper | replace('"', '') -%}
 
     {%- if constraint_name|length > 30 %}
         {%- set constraint_name_query %}

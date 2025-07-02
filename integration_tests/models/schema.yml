@@ -20,6 +20,23 @@ models:
         tests:
           - dbt_constraints.unique_key
           - unique
+      - name: test_array_col
+        description: "Test that we don't create not null contraints on array columns"
+        tests:
+          - not_null
+      - name: test_object_col
+        description: "Test that we don't create not null contraints on object columns"
+        tests:
+          - not_null
+      - name: test_variant_col
+        description: "Test that we don't create not null contraints on variant columns"
+        tests:
+          - not_null
+      - name: TitleCasePartKey
+        quote: true
+        tests:
+          - not_null
+          - dbt_constraints.unique_key
     tests:
       - dbt_constraints.unique_key:
           column_name: p_partkey
