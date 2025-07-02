@@ -379,7 +379,7 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
         {%- set upper_column_list = [] -%}
         {%- for row in results.rows -%}
             {%- do upper_column_list.append(row["column_name"]|upper) -%}
-            {%- if row['null?'] == 'true' -%}
+            {%- if row['null?'] == 'false' -%}
                 {%- do not_null_col.append(row["column_name"]|upper) -%}
             {%- endif -%}
             {%- if row['data_type'] is string -%}
