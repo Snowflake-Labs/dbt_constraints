@@ -9,18 +9,19 @@ NOTE: This test is designed to implement the "primary key" as specified in ANSI 
     columns be the null value."
 #}
 
-{%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) %}
+{%- set prefixed_columns_list = dbt_constraints.get_prefixed_column_list(column_names, 'pk_test', quote_columns) -%}
 
 {#- This test will return for any duplicates and if any of the key columns is null -#}
-select
-    {{columns_csv}}, count(*) as row_count
-from {{model}}
-group by {{columns_csv}}
-having count(*) > 1
-    {% for column in column_names -%}
-    or {{column}} is null
-    {% endfor %}
-
+select validation_errors.* from (
+    select
+        {{prefixed_columns_list | join(', ')}}, count(*) as n_records
+    from {{model}} pk_test
+    group by {{prefixed_columns_list | join(', ')}}
+    having count(*) > 1
+        {% for column in prefixed_columns_list -%}
+        or {{column}} is null
+        {% endfor %}
+) validation_errors
 {%- endmacro -%}
 
 
@@ -33,16 +34,16 @@ NOTE: This test is designed to implement the "unique constraint" as specified in
     a table have the same non-null values in the unique columns."
 #}
 
-{%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) %}
+{%- set prefixed_columns_list = dbt_constraints.get_prefixed_column_list(column_names, 'uk_test', quote_columns) -%}
 
 {#- This test will return any duplicates -#}
-
-select
-    {{columns_csv}}
-from {{model}}
-group by {{columns_csv}}
-having count(*) > 1
-
+select validation_errors.* from (
+    select
+        {{prefixed_columns_list | join(', ')}}, count(*) as n_records
+    from {{model}} uk_test
+    group by {{prefixed_columns_list | join(', ')}}
+    having count(*) > 1
+) validation_errors
 {%- endmacro -%}
 
 
@@ -66,33 +67,35 @@ does NOT need to match a row in a referenced unique key. This is implemented by 
 rows from the test that have a NULL value in any of the columns.
 #}
 
-{%- set fk_columns_list=dbt_constraints.get_quoted_column_list(fk_column_names, quote_columns) %}
-{%- set pk_columns_list=dbt_constraints.get_quoted_column_list(pk_column_names, quote_columns) %}
-
-{%- set join_conditions = [] -%}
-{%- for x in range(fk_columns_list|count) -%}
-    {%- set join_conditions = join_conditions.append( 'parent.' ~ pk_columns_list[x] ~ ' = child.' ~ fk_columns_list[x] ) -%}
-{%- endfor -%}
-
-{%- set child_prefixed_columns_list = [] -%}
-{%- for x in range(fk_columns_list|count) -%}
-    {%- set child_prefixed_columns_list = child_prefixed_columns_list.append( 'child.' ~ fk_columns_list[x] ) -%}
-{%- endfor -%}
-
+{%- set fk_columns_inner_list=dbt_constraints.get_prefixed_column_list(fk_column_names, 'fk_child_inner', quote_columns) %}
+{%- set pk_columns_inner_list=dbt_constraints.get_prefixed_column_list(pk_column_names, 'fk_parent_inner', quote_columns) %}
+{%- set pk_columns_outer_list=dbt_constraints.get_prefixed_column_list(pk_column_names, 'fk_parent', quote_columns) %}
+{%- set join_conditions = dbt_constraints.get_join_conditions(fk_column_names, 'fk_child', pk_column_names, 'fk_parent', quote_columns) -%}
 
 {#- This test will return if all the columns are not null
     and the values are not found in the referenced PK table #}
 
-select
-    {{ child_prefixed_columns_list | join(', ') }}
-from {{ model }} child
-left join {{ pk_table_name }} parent
-    on {{ join_conditions | join(' and ') }}
-where parent.{{ pk_columns_list | first }} is null
-    {% for child_column in child_prefixed_columns_list -%}
-    and {{ child_column }} is not null
-    {% endfor %}
+select validation_errors.* from (
+    select
+        fk_child.*
+    from (
+        select
+            {{ fk_columns_inner_list | join(', ') }}
+        from {{model}} fk_child_inner
+        where 1=1
+            {% for column in fk_columns_inner_list -%}
+            and {{column}} is not null
+            {% endfor -%}
+        ) fk_child
+    left join (
+        select
+            {{ pk_columns_inner_list | join(', ') }}
+        from {{pk_table_name}} fk_parent_inner
+        ) fk_parent
+            on {{ join_conditions | join(' and ') }}
 
+    where {{ pk_columns_outer_list | first }} is null
+) validation_errors
 {%- endmacro -%}
 
 
@@ -122,4 +125,27 @@ where parent.{{ pk_columns_list | first }} is null
     {%- set columns_csv=column_list | join(', ') -%}
     {{ return(columns_csv) }}
 
+{%- endmacro -%}
+
+
+{%- macro get_prefixed_column_list(column_array, prefix_alias, quote_columns=false) -%}
+    {%- set column_list = dbt_constraints.get_quoted_column_list(column_array, quote_columns) -%}
+
+    {%- set prefixed_column_list = [] -%}
+    {%- for x in range(column_list|count) -%}
+        {%- set prefixed_column_list = prefixed_column_list.append( prefix_alias ~ '.' ~ column_list[x] ) -%}
+    {%- endfor -%}
+    {{ return(prefixed_column_list) }}
+{%- endmacro -%}
+
+
+{%- macro get_join_conditions(column_array_left, prefix_alias_left, column_array_right, prefix_alias_right, quote_columns=false) -%}
+    {%- set column_list_left = dbt_constraints.get_prefixed_column_list(column_array_left, prefix_alias_left, quote_columns) -%}
+    {%- set column_list_right = dbt_constraints.get_prefixed_column_list(column_array_right, prefix_alias_right, quote_columns) -%}
+
+    {%- set join_conditions = [] -%}
+    {%- for x in range(column_list_left|count) -%}
+        {%- set join_conditions = join_conditions.append( column_list_left[x] ~ ' = ' ~ column_list_right[x] ) -%}
+    {%- endfor -%}
+    {{ return(join_conditions) }}
 {%- endmacro -%}
