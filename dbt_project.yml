@@ -1,6 +1,6 @@
 
 name: 'dbt_constraints'
-version: '1.0.5'
+version: '1.0.6'
 config-version: 2
 
 # These macros depend on the results and graph objects in dbt >=0.19.0
