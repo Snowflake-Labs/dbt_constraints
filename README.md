@@ -80,8 +80,9 @@ packages:
       - name: OL_CUSTKEY
         tests:
           - dbt_constraints.foreign_key:
-              pk_table_name: ref('DIM_CUSTOMERS')
-              pk_column_name: C_CUSTKEY
+              arguments:
+                pk_table_name: ref('DIM_CUSTOMERS')
+                pk_column_name: C_CUSTKEY
     tests:
       # Single column constraints
       - dbt_constraints.primary_key:
@@ -94,21 +95,24 @@ packages:
           pk_column_name: C_CUSTKEY
       # Multiple column constraints
       - dbt_constraints.primary_key:
-          column_names:
-            - OL_PK_COLUMN_1
-            - OL_PK_COLUMN_2
+          arguments:
+            column_names:
+              - OL_PK_COLUMN_1
+              - OL_PK_COLUMN_2
       - dbt_constraints.unique_key:
-          column_names:
-            - OL_UK_COLUMN_1
-            - OL_UK_COLUMN_2
+          arguments
+            column_names:
+              - OL_UK_COLUMN_1
+              - OL_UK_COLUMN_2
       - dbt_constraints.foreign_key:
-          fk_column_names:
-            - OL_FK_COLUMN_1
-            - OL_FK_COLUMN_2
-          pk_table_name: ref('DIM_CUSTOMERS')
-          pk_column_names:
-            - C_PK_COLUMN_1
-            - C_PK_COLUMN_2
+          arguments:
+            fk_column_names:
+              - OL_FK_COLUMN_1
+              - OL_FK_COLUMN_2
+            pk_table_name: ref('DIM_CUSTOMERS')
+            pk_column_names:
+              - C_PK_COLUMN_1
+              - C_PK_COLUMN_2
 ```
 
 ### Dependencies and Requirements
@@ -180,12 +184,13 @@ version: 2
 models:
   - name: your_model_name
     config:
-      always_create_constraint: true
+      meta:
+        always_create_constraint: true
 ```
 
 This is an example of activating the feature in the header of a model:
 ```jinja
-{{ config(always_create_constraint = true) }}
+{{ config( meta={'always_create_constraint': True}) }}
 ```
 
 ## Primary Maintainers
