@@ -329,7 +329,7 @@
                 {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
                     if node.config
                     and ( node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
-                        or node.config.meta.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
+                        or node.config.get("meta", {}).get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and dbt_constraints_sources_enabled
                             and ( ( dbt_constraints_sources_pk_enabled and test_name in("primary_key") )
@@ -343,7 +343,7 @@
                     {%- do table_models.append(node) -%}
                     {%- if node.resource_type == "source"
                         or node.config.get("materialized", "other") not in ("table", "incremental", "snapshot", "seed")
-                        or node.config.meta.get("materialized", "other") not in ("table", "incremental", "snapshot", "seed") -%}
+                        or node.config.get("meta", {}).get("materialized", "other") not in ("table", "incremental", "snapshot", "seed") -%}
                         {#- If we are using a sources or custom materializations, we will need to verify permissions -#}
                         {%- set ns.verify_permissions = true -%}
                     {%- endif -%}
