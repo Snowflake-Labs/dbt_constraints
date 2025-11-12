@@ -1,4 +1,3 @@
-
 version: 2
 
 models:
@@ -97,26 +96,13 @@ models:
       - name: o_custkey
         tests:
           - relationships:
-              to: ref('dim_customers')
-              field: c_custkey
+              arguments:
+                to: ref('dim_customers')
+                field: c_custkey
           - dbt_constraints.foreign_key:
-              pk_table_name: ref('dim_customers')
-              pk_column_name: c_custkey
-          - dbt_constraints.foreign_key:
-              pk_table_name: ref('dim_customers')
-              pk_column_names:
-                - c_custkey
-    tests:
-      - dbt_constraints.foreign_key:
-          fk_column_name: o_custkey
-          pk_table_name: ref('dim_customers')
-          pk_column_name: c_custkey
-      - dbt_constraints.foreign_key:
-          fk_column_names:
-            - o_custkey
-          pk_table_name: ref('dim_customers')
-          pk_column_names:
-            - c_custkey
+              arguments:
+                pk_table_name: ref('dim_customers')
+                pk_column_name: c_custkey
 
   - name: fact_order_line
     description: "Fact Order Lines"
@@ -125,8 +111,9 @@ models:
         description: "FK to dim_orders and first key in PK"
         tests:
           - relationships:
-              to: ref('dim_orders')
-              field: o_orderkey
+              arguments:
+                to: ref('dim_orders')
+                field: o_orderkey
       - name: l_partkey
         description: "1st column in FK to dim_part_supplier. Testing behavior when one key is nullable and the second is not."
       - name: l_suppkey
@@ -143,18 +130,20 @@ models:
     tests:
       # Demonstration that the primary_key test can accept multiple columns
       - dbt_constraints.primary_key:
-          column_names:
-            - l_orderkey
-            - l_linenumber
+          arguments:
+            column_names:
+              - l_orderkey
+              - l_linenumber
       # Test multi-column FK
       - dbt_constraints.foreign_key:
-          fk_column_names:
-            - l_partkey
-            - l_suppkey
-          pk_table_name: ref('dim_part_supplier')
-          pk_column_names:
-            - ps_partkey
-            - ps_suppkey
+          arguments:
+            fk_column_names:
+              - l_partkey
+              - l_suppkey
+            pk_table_name: ref('dim_part_supplier')
+            pk_column_names:
+              - ps_partkey
+              - ps_suppkey
 
   - name: dim_duplicate_orders
     description: "Test that we do not try to create PK/UK on failed tests"
@@ -195,37 +184,42 @@ models:
           - not_null
     tests:
       - dbt_constraints.foreign_key:
-          fk_column_name: l_orderkey
-          pk_table_name: ref('dim_missing_orders')
-          pk_column_name: o_orderkey
           config:
             severity: warn
       # Test that we still create this valid primary key
+          arguments:
+            fk_column_name: l_orderkey
+            pk_table_name: ref('dim_missing_orders')
+            pk_column_name: o_orderkey
       - dbt_constraints.primary_key:
-          column_names:
-            - l_orderkey
-            - l_linenumber
+          arguments:
+            column_names:
+              - l_orderkey
+              - l_linenumber
       # Test that we do not create a FK because the PK/UK is missing
       - dbt_constraints.foreign_key:
-          fk_column_names:
-            - l_partkey
-            - l_suppkey
-          pk_table_name: ref('dim_part_supplier_missing_con')
-          pk_column_names:
-            - ps_partkey
-            - ps_suppkey
+          arguments:
+            fk_column_names:
+              - l_partkey
+              - l_suppkey
+            pk_table_name: ref('dim_part_supplier_missing_con')
+            pk_column_names:
+              - ps_partkey
+              - ps_suppkey
 
   - name: dim_orders_null_keys
     description: "All Orders"
     config:
-      always_create_constraint: true
+      meta:
+        always_create_constraint: true
     columns:
       - name: o_custkey
         tests:
           # test that we still create this valid foreign key
           - dbt_constraints.foreign_key:
-              pk_table_name: ref('dim_customers')
-              pk_column_name: c_custkey
+              arguments:
+                pk_table_name: ref('dim_customers')
+                pk_column_name: c_custkey
     tests:
       # test that we do not create this PK with missing values
       - dbt_constraints.primary_key:
@@ -247,17 +241,19 @@ models:
           - not_null
           # Testing FK to a source
           - relationships:
-              to: source('tpc_h', 'source_supplier')
-              field: s_suppkey
-          # Testing FK to a seed
+              arguments:
+                to: source('tpc_h', 'source_supplier')
+                field: s_suppkey
           - relationships:
-              to: ref('supplier')
-              field: s_suppkey
+              arguments:
+                to: ref('supplier')
+                field: s_suppkey
     tests:
       - dbt_constraints.primary_key:
-          column_names:
-            - ps_partkey
-            - ps_suppkey
+          arguments:
+            column_names:
+              - ps_partkey
+              - ps_suppkey
 
   - name: dim_part_supplier_missing_con
     description: "Table is missing constraints to test FK won't be generated to it"
@@ -269,8 +265,9 @@ models:
         description: "FK to dim_orders and first key in PK"
         tests:
           - relationships:
-              to: ref('dim_orders')
-              field: o_orderkey
+              arguments:
+                to: ref('dim_orders')
+                field: o_orderkey
       - name: l___________________linenumber
         description: "Order Line Number and second key in PK"
       - name: l_______________integration_id
@@ -281,15 +278,17 @@ models:
     tests:
       # Demonstration that the primary_key test can accept multiple columns
       - dbt_constraints.primary_key:
-          column_names:
-            - l_____________________orderkey
-            - l___________________linenumber
+          arguments:
+            column_names:
+              - l_____________________orderkey
+              - l___________________linenumber
       # Test multi-column FK
       - dbt_constraints.foreign_key:
-          fk_column_names:
-            - l______________________partkey
-            - l______________________suppkey
-          pk_table_name: ref('dim_part_supplier')
-          pk_column_names:
-            - ps_partkey
-            - ps_suppkey
+          arguments:
+            fk_column_names:
+              - l______________________partkey
+              - l______________________suppkey
+            pk_table_name: ref('dim_part_supplier')
+            pk_column_names:
+              - ps_partkey
+              - ps_suppkey

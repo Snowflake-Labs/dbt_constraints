@@ -1,4 +1,3 @@
-
 version: 2
 
 # We are creating sources that match our seed tables to test source
@@ -15,9 +14,9 @@ sources:
               - unique
               - not_null
               - relationships:
-                  to: ref('part')
-                  field: p_partkey
-
+                  arguments:
+                    to: ref('part')
+                    field: p_partkey
       - name: source_partsupp
         columns:
           - name: ps_partkey
@@ -25,33 +24,40 @@ sources:
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'source_part')
-                  field: p_partkey
+                  arguments:
+                    to: source('tpc_h', 'source_part')
+                    field: p_partkey
               - relationships:
-                  to: ref('partsupp')
-                  field: ps_partkey
+                  arguments:
+                    to: ref('partsupp')
+                    field: ps_partkey
               - relationships:
-                  to: ref('part')
-                  field: p_partkey
+                  arguments:
+                    to: ref('part')
+                    field: p_partkey
           - name: ps_suppkey
             description: "Part of compound primary key for this table"
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'source_supplier')
-                  field: s_suppkey
+                  arguments:
+                    to: source('tpc_h', 'source_supplier')
+                    field: s_suppkey
               - relationships:
-                  to: ref('partsupp')
-                  field: ps_suppkey
+                  arguments:
+                    to: ref('partsupp')
+                    field: ps_suppkey
               - relationships:
-                  to: ref('supplier')
-                  field: s_suppkey
+                  arguments:
+                    to: ref('supplier')
+                    field: s_suppkey
         tests:
           # This is a higher performance way to test compound PK/UK
           - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - "ps_partkey"
-                - "ps_suppkey"
+              arguments:
+                combination_of_columns:
+                  - "ps_partkey"
+                  - "ps_suppkey"
           # How to validate a compound primary key natively
           - unique:
               column_name: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
@@ -64,8 +70,9 @@ sources:
               - unique
               - not_null
               - relationships:
-                  to: ref('supplier')
-                  field: s_suppkey
+                  arguments:
+                    to: ref('supplier')
+                    field: s_suppkey
           - name: s_nationkey
             tests:
               - not_null
@@ -78,15 +85,16 @@ sources:
               - unique
               - not_null
               - relationships:
-                  to: ref('orders')
-                  field: o_orderkey
+                  arguments:
+                    to: ref('orders')
+                    field: o_orderkey
           - name: o_custkey
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'source_customer')
-                  field: c_custkey
-
+                  arguments:
+                    to: source('tpc_h', 'source_customer')
+                    field: c_custkey
       - name: source_customer
         columns:
           - name: c_custkey
@@ -95,8 +103,9 @@ sources:
               - unique
               - not_null
               - relationships:
-                  to: ref('customer')
-                  field: c_custkey
+                  arguments:
+                    to: ref('customer')
+                    field: c_custkey
           - name: c_name
             description: "Customer Name"
             tests:
@@ -111,17 +120,19 @@ sources:
             tests:
               - not_null
               - relationships:
-                  to: source('tpc_h', 'source_orders')
-                  field: o_orderkey
+                  arguments:
+                    to: source('tpc_h', 'source_orders')
+                    field: o_orderkey
           - name: l_linenumber
             tests:
               - not_null
         tests:
           # This is a higher performance way to test compound PK/UK
           - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - l_orderkey
-                - l_linenumber
+              arguments:
+                combination_of_columns:
+                  - l_orderkey
+                  - l_linenumber
           # How to validate a compound primary key natively
           - unique:
               column_name: "coalesce(cast(l_orderkey as varchar(100)), '') || '~' || coalesce(cast(l_linenumber as varchar(100)), '')"
@@ -129,15 +140,15 @@ sources:
           # How to validate a compound foreign key
           - relationships:
               column_name: "coalesce(cast(l_partkey as varchar(100)), '') || '~' || coalesce(cast(l_suppkey as varchar(100)), '')"
-              to: source('tpc_h', 'source_partsupp')
-              field: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
-
-          # multi-column FK
+              arguments:
+                to: source('tpc_h', 'source_partsupp')
+                field: "coalesce(cast(ps_partkey as varchar(100)), '') || '~' || coalesce(cast(ps_suppkey as varchar(100)), '')"
           - dbt_constraints.foreign_key:
-              fk_column_names:
-                - l_orderkey
-                - l_linenumber
-              pk_table_name: ref('lineitem')
-              pk_column_names:
-                - l_orderkey
-                - l_linenumber
+              arguments:
+                fk_column_names:
+                  - l_orderkey
+                  - l_linenumber
+                pk_table_name: ref('lineitem')
+                pk_column_names:
+                  - l_orderkey
+                  - l_linenumber
