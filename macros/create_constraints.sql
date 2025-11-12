@@ -534,7 +534,7 @@
 
         {%- set tab_column_list = [] -%}
         {%- for column in tab_Columns -%}
-            {{ tab_column_list.append(column.name|upper|trim('"')) }}
+            {% do tab_column_list.append(column.name|upper|trim('"')) %}
         {%- endfor -%}
         {%- do lookup_cache.table_columns.update({ table_relation: tab_column_list }) -%}
     {%- endif -%}

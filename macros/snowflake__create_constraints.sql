@@ -154,7 +154,7 @@
             {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
-                {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+                {%- do modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}

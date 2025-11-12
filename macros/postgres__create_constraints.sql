@@ -78,7 +78,7 @@
 
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
-                {%- set modify_statements = modify_statements.append( "ALTER COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+                {%- do modify_statements.append( "ALTER COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- do log("Creating not null constraint for: " ~ columns_list | join(", ") ~ " in " ~ table_relation, info=true) -%}

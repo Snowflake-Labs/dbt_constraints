@@ -138,7 +138,7 @@ END;
 
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
-                {%- set modify_statements = modify_statements.append( column ~ " NOT NULL" ) -%}
+                {%- do modify_statements.append( column ~ " NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}

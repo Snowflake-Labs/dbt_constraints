@@ -106,7 +106,7 @@
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
-                {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+                {%- do modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}
