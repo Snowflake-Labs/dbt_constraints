@@ -1,0 +1,59 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# dbt artifacts (will be generated in container)
+target/
+dbt_packages/
+logs/
+dbt_internal_packages/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation and non-essential files
+*.md
+!README.md
+docs/
+.github/
+
+# Test artifacts
+.coverage
+htmlcov/
+.tox/
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+
+# Taskmaster and Cursor
+.taskmaster/
+.cursor/
+
+# Docker env files (will be mounted as volumes)
+.dockerenv/
+
+# Security
+.cache_ggshield
+
+# Node modules (if any)
+node_modules/

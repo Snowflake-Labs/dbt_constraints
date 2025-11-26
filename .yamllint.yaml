@@ -1,0 +1,38 @@
+---
+extends: default
+
+rules:
+  # Allow longer lines in YAML (docker-compose can get long)
+  line-length:
+    max: 120
+    level: warning
+
+  # Don't require document start (---)
+  document-start: disable
+
+  # Allow duplicate keys (sometimes needed in dbt)
+  key-duplicates: enable
+
+  # Indentation: 2 spaces
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  # Trailing spaces
+  trailing-spaces: enable
+
+  # Comments
+  comments:
+    min-spaces-from-content: 1
+
+  # Truthy values (yes/no, true/false, on/off)
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+
+ignore: |
+  .venv/
+  venv/
+  dbt_packages/
+  target/
+  .pytest_cache/
