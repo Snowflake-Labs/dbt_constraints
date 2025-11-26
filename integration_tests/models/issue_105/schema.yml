@@ -1,0 +1,115 @@
+version: 2
+
+models:
+  # Issue #105 Test Cases - Testing custom generate_*_name() macros
+  # These tests verify that foreign key creation respects customized properties
+  # of referenced models when using generate_database_name(), generate_schema_name(),
+  # and generate_alias_name() macros.
+
+  - name: issue_105_parent_custom_schema
+    description: "Parent table with custom schema for issue #105"
+    columns:
+      - name: id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: id
+
+  - name: issue_105_child_custom_schema
+    description: "Child table with FK to parent with custom schema"
+    columns:
+      - name: child_id
+        tests:
+          - not_null
+      - name: parent_id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: child_id
+      - dbt_constraints.foreign_key:
+          fk_column_name: parent_id
+          pk_table_name: ref('issue_105_parent_custom_schema')
+          pk_column_name: id
+
+  - name: issue_105_parent_custom_alias
+    description: "Parent table with custom alias for issue #105"
+    columns:
+      - name: id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: id
+
+  - name: issue_105_child_custom_alias
+    description: "Child table with FK to parent with custom alias"
+    columns:
+      - name: child_id
+        tests:
+          - not_null
+      - name: parent_id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: child_id
+      - dbt_constraints.foreign_key:
+          fk_column_name: parent_id
+          pk_table_name: ref('issue_105_parent_custom_alias')
+          pk_column_name: id
+
+  - name: issue_105_parent_custom_database
+    description: "Parent table with custom database for issue #105"
+    columns:
+      - name: id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: id
+
+  - name: issue_105_child_custom_database
+    description: "Child table with FK to parent with custom database"
+    columns:
+      - name: child_id
+        tests:
+          - not_null
+      - name: parent_id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: child_id
+      - dbt_constraints.foreign_key:
+          fk_column_name: parent_id
+          pk_table_name: ref('issue_105_parent_custom_database')
+          pk_column_name: id
+
+  - name: issue_105_parent_all_custom
+    description: "Parent table with all customizations for issue #105"
+    columns:
+      - name: id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: id
+
+  - name: issue_105_child_all_custom
+    description: "Child table with FK to parent with all customizations"
+    columns:
+      - name: child_id
+        tests:
+          - not_null
+      - name: parent_id
+        tests:
+          - not_null
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: child_id
+      - dbt_constraints.foreign_key:
+          fk_column_name: parent_id
+          pk_table_name: ref('issue_105_parent_all_custom')
+          pk_column_name: id

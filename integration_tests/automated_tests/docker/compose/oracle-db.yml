@@ -1,0 +1,24 @@
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-oracle
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
+      APP_USER: ${ORACLE_USER}
+      APP_USER_PASSWORD: ${ORACLE_PASSWORD}
+    ports:
+      - "1521:1521"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+    shm_size: '2gb'
+
+networks:
+  test-network:
+    name: ${COMPOSE_PROJECT_NAME:-dbt-test}-network
+    driver: bridge

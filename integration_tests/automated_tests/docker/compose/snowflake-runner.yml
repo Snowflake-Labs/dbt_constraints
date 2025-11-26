@@ -1,0 +1,27 @@
+services:
+  dbt-snowflake:
+    build:
+      context: ../../../../
+      dockerfile: integration_tests/automated_tests/docker/build/Dockerfile
+      args:
+        DBT_ADAPTER: snowflake
+        DBT_VERSION: ${DBT_VERSION:-1.9.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-snowflake
+    environment:
+      DBT_TARGET: snowflake
+      DBT_PROJECT_DIR: /project/integration_tests
+      DBT_PROFILES_DIR: /project/integration_tests/.dockerenv
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+      SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD:-}
+      SNOWFLAKE_PRIVATE_KEY_PATH: ${SNOWFLAKE_PRIVATE_KEY_PATH:-}
+      SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE}
+      SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE}
+      SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE}
+      SNOWFLAKE_SCHEMA: ${SNOWFLAKE_SCHEMA:-dbt_constraints_test}
+      SNOWFLAKE_THREADS: ${SNOWFLAKE_THREADS:-8}
+    volumes:
+      - ../../../../:/project
+      - ../../../.dockerenv:/project/integration_tests/.dockerenv
+      - /Users/dflippo/.ssh:/Users/dflippo/.ssh:ro
+    working_dir: /project/integration_tests
