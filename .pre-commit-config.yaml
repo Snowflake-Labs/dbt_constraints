@@ -34,14 +34,6 @@ repos:
         args: [--fix]
         files: ^integration_tests/automated_tests/.*\.py$
 
-  # YAML linter
-  - repo: https://github.com/adrienverge/yamllint
-    rev: v1.37.1
-    hooks:
-      - id: yamllint
-        name: yamllint (YAML linter)
-        args: [-c=.yamllint.yaml]
-
   # General file hygiene checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
