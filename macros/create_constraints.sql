@@ -410,9 +410,9 @@
 
                     {%- if pk_model.unique_id not in selected_resources -%}
                         {%- set pk_table_relation = adapter.get_relation(
-                            database=(pk_model.config.database or pk_model.database),
-                            schema=(pk_model.config.schema or pk_model.schema),
-                            identifier=(pk_model.config.alias or pk_model.alias)) -%}
+                            database=(pk_model.database or pk_model.config.database),
+                            schema=(pk_model.schema or pk_model.config.schema),
+                            identifier=(pk_model.alias or pk_model.config.alias)) -%}
                     {%- else -%}
                         {%- set pk_table_relation = adapter.get_relation(
                             database=pk_model.database,

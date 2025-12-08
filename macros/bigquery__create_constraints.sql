@@ -148,11 +148,11 @@
         {%- set lookup_query -%}
         with union_obj_priv as (
             -- Union together all project priveleges & table.  Specific to BQ permissions inherritence.
-            select * 
+            select *
             from {{table_relation.database}}.`region-{{ rel_location }}`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES
-            where (upper(object_schema) = upper('{{table_relation.schema}}') and upper(object_name) = upper('{{table_relation.identifier}}')) 
+            where (upper(object_schema) = upper('{{table_relation.schema}}') and upper(object_name) = upper('{{table_relation.identifier}}'))
             union all
-            select * 
+            select *
             from {{table_relation.database}}.`region-{{ rel_location }}`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES
             where object_name= '{{table_relation.schema}}'
         )
@@ -180,11 +180,11 @@
         {%- set lookup_query -%}
         with union_obj_priv as (
             -- Union together all project priveleges & table.  Specific to BQ permissions inherritence.
-            select * 
+            select *
             from {{table_relation.database}}.`region-{{ rel_location }}`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES
-            where (upper(object_schema) = upper('{{table_relation.schema}}') and upper(object_name) = upper('{{table_relation.identifier}}')) 
+            where (upper(object_schema) = upper('{{table_relation.schema}}') and upper(object_name) = upper('{{table_relation.identifier}}'))
             union all
-            select * 
+            select *
             from {{table_relation.database}}.`region-{{ rel_location }}`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES
             where object_name= '{{table_relation.schema}}'
         )

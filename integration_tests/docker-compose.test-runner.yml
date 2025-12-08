@@ -1,0 +1,206 @@
+# Extended Docker Compose with separate test runner containers per adapter
+# Each adapter runs in its own isolated container to avoid dependency conflicts
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Test Runner Services (one per adapter)
+  # =============================================================================
+
+  # PostgreSQL test runner
+  test-postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+      target: postgres-runner
+      args:
+        DBT_VERSION: ${DBT_VERSION:-1.7.0}
+    image: dbt-constraints-test:postgres-${DBT_VERSION:-1.7.0}
+    container_name: dbt-test-postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      DBT_TEST_ENV: ${DBT_TEST_ENV:-dev}
+      DBT_TEST_SUFFIX: ${DBT_TEST_SUFFIX:-_test}
+    volumes:
+      - .:/workspace
+    networks:
+      - test-network
+    profiles:
+      - postgres
+      - all
+
+  # Snowflake test runner
+  test-snowflake:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+      target: snowflake-runner
+      args:
+        DBT_VERSION: ${DBT_VERSION:-1.7.0}
+    image: dbt-constraints-test:snowflake-${DBT_VERSION:-1.7.0}
+    container_name: dbt-test-snowflake
+    environment:
+      DBT_TEST_ENV: ${DBT_TEST_ENV:-dev}
+      DBT_TEST_SUFFIX: ${DBT_TEST_SUFFIX:-_test}
+      # Snowflake credentials (from host environment or CI)
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT:-}
+      SNOWFLAKE_USER: ${SNOWFLAKE_USER:-}
+      SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD:-}
+      SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE:-}
+      SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE:-}
+      SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE:-}
+      SNOWFLAKE_SCHEMA: ${SNOWFLAKE_SCHEMA:-}
+    volumes:
+      - .:/workspace
+      # Mount SSH keys if using key-based auth
+      - ${HOME}/.ssh:/root/.ssh:ro
+    networks:
+      - test-network
+    profiles:
+      - snowflake
+      - all
+
+  # Oracle test runner
+  test-oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+      target: oracle-runner
+      args:
+        DBT_VERSION: ${DBT_VERSION:-1.7.0}
+    image: dbt-constraints-test:oracle-${DBT_VERSION:-1.7.0}
+    container_name: dbt-test-oracle
+    depends_on:
+      oracle:
+        condition: service_healthy
+    environment:
+      ORACLE_PDB: ${ORACLE_PDB}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
+      ORACLE_HOST: oracle
+      DBT_TEST_ENV: ${DBT_TEST_ENV:-dev}
+      DBT_TEST_SUFFIX: ${DBT_TEST_SUFFIX:-_test}
+    volumes:
+      - .:/workspace
+    networks:
+      - test-network
+    profiles:
+      - oracle
+      - all
+
+  # SQL Server test runner
+  test-sqlserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+      target: sqlserver-runner
+      args:
+        DBT_VERSION: ${DBT_VERSION:-1.7.0}
+    image: dbt-constraints-test:sqlserver-${DBT_VERSION:-1.7.0}
+    container_name: dbt-test-sqlserver
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      SQLSERVER_DB: ${SQLSERVER_DB}
+      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
+      SQLSERVER_HOST: sqlserver
+      DBT_TEST_ENV: ${DBT_TEST_ENV:-dev}
+      DBT_TEST_SUFFIX: ${DBT_TEST_SUFFIX:-_test}
+    volumes:
+      - .:/workspace
+    networks:
+      - test-network
+    profiles:
+      - sqlserver
+      - all
+
+  # =============================================================================
+  # Database Services
+  # =============================================================================
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: dbt-constraints-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - test-network
+    profiles:
+      - postgres
+      - all
+
+  oracle:
+    image: container-registry.oracle.com/database/free:latest-lite
+    container_name: dbt-constraints-oracle
+    platform: linux/amd64
+    environment:
+      ORACLE_PDB: ${ORACLE_PDB}
+      ORACLE_PWD: ${ORACLE_PASSWORD}
+      ORACLE_CHARACTERSET: AL32UTF8
+    ports:
+      - "1521:1521"
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+      - ./ora_setup:/opt/oracle/scripts/setup
+    networks:
+      - test-network
+    profiles:
+      - oracle
+      - all
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dbt-constraints-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SQLSERVER_PASSWORD}
+      SQLSERVER_DB: ${SQLSERVER_DB}
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $$MSSQL_SA_PASSWORD -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - test-network
+    profiles:
+      - sqlserver
+      - all
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  oracle_data:
+  sqlserver_data:

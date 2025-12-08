@@ -1,0 +1,23 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SQLSERVER_PASSWORD}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$SA_PASSWORD\" -Q 'SELECT 1'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+
+networks:
+  test-network:
+    name: ${COMPOSE_PROJECT_NAME:-dbt-test}-network
+    driver: bridge

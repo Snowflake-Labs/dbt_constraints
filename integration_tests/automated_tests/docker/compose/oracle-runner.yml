@@ -1,0 +1,30 @@
+services:
+  dbt-oracle:
+    build:
+      context: ../../../../
+      dockerfile: integration_tests/automated_tests/docker/build/Dockerfile
+      args:
+        DBT_ADAPTER: oracle
+        DBT_VERSION: ${DBT_VERSION:-1.9.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-oracle
+    environment:
+      DBT_TARGET: oracle
+      DBT_PROJECT_DIR: /project/integration_tests
+      DBT_PROFILES_DIR: /project/integration_tests/.dockerenv
+      ORACLE_USER: ${ORACLE_USER}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
+      ORACLE_HOST: dbt-test-db-oracle
+      ORACLE_PORT: 1521
+      ORACLE_DATABASE: ${ORACLE_DATABASE:-FREEPDB1}
+      ORACLE_SERVICE_NAME: ${ORACLE_SERVICE_NAME:-FREEPDB1}
+    volumes:
+      - ../../../../:/project
+      - ../../../.dockerenv:/project/integration_tests/.dockerenv
+    networks:
+      - test-network
+    working_dir: /project/integration_tests
+
+networks:
+  test-network:
+    name: dbt-test-db-network
+    external: true

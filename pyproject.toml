@@ -1,0 +1,54 @@
+[tool.ruff]
+# Target Python 3.11+
+target-version = "py311"
+
+# Only lint Python files in automated_tests
+include = ["integration_tests/automated_tests/**/*.py"]
+
+# Exclude common directories
+exclude = [
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+    "*.egg-info",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
+
+# Line length to match Black's default
+line-length = 88
+
+[tool.ruff.lint]
+# Enable recommended rules
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+
+# Allow unused variables when they start with underscore
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"conftest.py" = ["F401", "F811"]  # Allow fixture redefinitions
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false

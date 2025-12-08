@@ -1,6 +1,6 @@
 # Troubleshooting dbt Constraints
 
-As it executes, dbt Constraints will log a number of messages when it cannot create a constraint. 
+As it executes, dbt Constraints will log a number of messages when it cannot create a constraint.
 A list of the messages is provided below with additional details on how to address the message.
 
 ## Messages that are displayed on the front-end of the command line interface and in the dbt log
@@ -10,7 +10,7 @@ Skipping primary/unique key because a physical column name was not found on the 
 Skipping foreign key because a physical column was not found on the pk table: {PK TABLE NAME} {PK TABLE COLUMNS}
 Skipping foreign key because a physical column was not found on the fk table: {FK TABLE NAME} {FK TABLE COLUMNS}
 ```
-- These error messages typically occur when a column is misspelled or if the test uses an expression instead of a column name. 
+- These error messages typically occur when a column is misspelled or if the test uses an expression instead of a column name.
 - One solution can be adding the expression as an additional column in your model so that you can reference it in your constraint.
 
 

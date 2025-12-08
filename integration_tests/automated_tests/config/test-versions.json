@@ -1,0 +1,27 @@
+{
+  "comment": "dbt version testing matrix - defines which dbt versions to test with each adapter",
+  "dbt_versions": {
+    "postgres": ["1.8.0", "1.9.0"],
+    "oracle": ["1.8.0", "1.9.0"],
+    "sqlserver": ["1.8.0", "1.9.0"],
+    "snowflake": ["1.5.0", "1.8.0", "1.9.0", "1.10.0"]
+  },
+  "adapters": {
+    "postgres": {
+      "package": "dbt-postgres",
+      "image": "postgres:17-alpine"
+    },
+    "oracle": {
+      "package": "dbt-oracle",
+      "image": "gvenzl/oracle-free:23-slim-faststart"
+    },
+    "sqlserver": {
+      "package": "dbt-sqlserver",
+      "image": "mcr.microsoft.com/mssql/server:2022-latest"
+    },
+    "snowflake": {
+      "package": "dbt-snowflake",
+      "image": null
+    }
+  }
+}
