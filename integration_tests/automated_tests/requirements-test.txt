@@ -1,0 +1,14 @@
+# Testing dependencies
+pytest>=8.0.0
+pytest-xdist>=3.5.0
+pytest-timeout>=2.2.0
+pytest-docker>=3.1.0
+pyyaml>=6.0.1
+
+# Database drivers for direct DB assertions
+psycopg2-binary>=2.9.0
+# oracledb>=1.4.0  # Uncomment when testing Oracle
+# pyodbc>=5.0.0     # Uncomment when testing SQL Server
+
+# Additional utilities
+python-dotenv>=1.0.0

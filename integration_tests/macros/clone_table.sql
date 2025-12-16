@@ -1,6 +1,6 @@
 {%- macro clone_table(new_prefix) -%}
     {%- if flags.WHICH == 'seed' and execute -%}
-    {{ return(adapter.dispatch('clone_table')(new_prefix)) }}
+        {{ return(adapter.dispatch('clone_table')(new_prefix)) }}
     {%- endif -%}
 {%- endmacro -%}
 
@@ -12,7 +12,7 @@
             identifier = new_prefix ~ this.identifier ) -%}
 
     {%- set clone_statement -%}
-    create or replace table {{table_clone}} clone {{this}}
+        create or replace table {{ table_clone }} clone {{ this }}
     {%- endset -%}
     {%- do log("Creating table clone: " ~ table_clone, info=false) -%}
     {%- do run_query(clone_statement) -%}
@@ -27,12 +27,12 @@
             identifier = new_prefix ~ this.identifier ) -%}
 
     {%- set clone_statement -%}
-    drop table if exists {{table_clone}}
+        drop table if exists {{ table_clone }}
     {%- endset -%}
     {%- do log("Drop table if exists: " ~ table_clone, info=true) -%}
 
     {%- set clone_statement -%}
-    create table if not exists {{table_clone}} as select * from {{this}}
+        create table if not exists {{ table_clone }} as select * from {{ this }}
     {%- endset -%}
     {%- do log("Creating table clone: " ~ table_clone, info=true) -%}
     {%- do run_query(clone_statement) -%}
@@ -54,12 +54,12 @@ sql_stmt long;
 BEGIN
     SELECT COUNT(*) INTO tbl_count
     FROM dba_tables
-    WHERE owner = '{{table_clone.schema}}'
-    AND table_name = '{{table_clone.identifier}}';
+    WHERE owner = '{{ table_clone.schema }}'
+    AND table_name = '{{ table_clone.identifier }}';
 
     IF(tbl_count <> 0)
         THEN
-        sql_stmt:='DROP TABLE {{table_clone}}';
+        sql_stmt:='DROP TABLE {{ table_clone }}';
         EXECUTE IMMEDIATE sql_stmt;
     END IF;
 END;
@@ -67,11 +67,9 @@ END;
     {%- do log("Drop table if exists: " ~ table_clone, info=false) -%}
 
     {%- set clone_statement -%}
-    create table {{table_clone}} as select * from {{this}}
+        create table {{ table_clone }} as select * from {{ this }}
     {%- endset -%}
     {%- do log("Creating table clone: " ~ table_clone, info=false) -%}
     {%- do run_query(clone_statement) -%}
 
 {%- endmacro -%}
-
-

@@ -1,0 +1,81 @@
+repos:
+  # =============================================================================
+  # FORMATTERS (run first to fix formatting)
+  # =============================================================================
+
+  # Python formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.6
+    hooks:
+      - id: ruff-format
+        name: ruff format (Python formatter)
+        files: ^integration_tests/automated_tests/.*\.py$
+
+  # JSON formatter
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.0.6
+    hooks:
+      - id: biome-check
+        name: biome check (JSON formatter)
+        additional_dependencies: ["@biomejs/biome@2.1.1"]
+        files: \.json$
+        exclude: ^docs/.*\.json$
+
+  # =============================================================================
+  # LINTERS (run after formatting to check code quality)
+  # =============================================================================
+
+  # Python linter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.6
+    hooks:
+      - id: ruff
+        name: ruff lint (Python linter)
+        args: [--fix]
+        files: ^integration_tests/automated_tests/.*\.py$
+
+  # General file hygiene checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+      - id: end-of-file-fixer
+        name: fix end of files
+      - id: check-yaml
+        name: check yaml syntax
+      - id: check-added-large-files
+        name: check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: check for merge conflicts
+      - id: mixed-line-ending
+        name: fix line endings
+        args: [--fix=lf]
+
+  # =============================================================================
+  # SECURITY SCANNERS (run last to scan final code)
+  # =============================================================================
+
+  # GitGuardian secret scanning
+  - repo: https://github.com/gitguardian/ggshield
+    rev: v1.45.0
+    hooks:
+      - id: ggshield
+        name: ggshield (GitGuardian security scan)
+        language_version: python3
+        stages: [pre-commit]
+
+  # Entro secret scanning
+  - repo: local
+    hooks:
+      - id: entro-secret-scan
+        name: Entro Secret Scan
+        entry: "bash -c '#!/bin/bash\n\necho \"Running entro security custom pre-commit hook...\"\n\nif git config --bool entro.skipSecretScan; then\n  echo \"Custom Hook: \U0001F6D1 Skipping secret scan due to git config 'entro.skipSecretScan' is true.\"\n  exit 0\nfi\n\necho \"Custom Hook: ✅ 'entro.skipSecretScan' is NOT true. Proceeding with scan.\"\n\n entro scan pre-commit . --fail-on-findings || { # '||' means: if previous command fails (non-zero exit)\n  echo \"Custom Hook: ❌ entro cli scan FAILED! Please fix issues before committing.\"\n  exit 1\n}\n\necho \"Custom Hook: ✅ entro cli scan completed successfully.\"\nexit 0'"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages:
+          - pre-commit
+        args:
+          - --fail-on-findings

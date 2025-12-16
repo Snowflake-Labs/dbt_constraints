@@ -1,0 +1,29 @@
+services:
+  dbt-postgres:
+    build:
+      context: ../../../../
+      dockerfile: integration_tests/automated_tests/docker/build/Dockerfile
+      args:
+        DBT_ADAPTER: postgres
+        DBT_VERSION: ${DBT_VERSION:-1.9.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-postgres
+    environment:
+      DBT_TARGET: postgres
+      DBT_PROJECT_DIR: /project/integration_tests
+      DBT_PROFILES_DIR: /project/integration_tests/.dockerenv
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: dbt-test-db-postgres
+      POSTGRES_PORT: 5432
+    volumes:
+      - ../../../../:/project
+      - ../../../.dockerenv:/project/integration_tests/.dockerenv
+    networks:
+      - test-network
+    working_dir: /project/integration_tests
+
+networks:
+  test-network:
+    name: dbt-test-db-network
+    external: true

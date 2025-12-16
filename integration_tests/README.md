@@ -1,15 +1,19 @@
 # dbt Constraints Integration Tests
+
 This set of models and associated tests is designed to test all the supported tests as well as most unsupported scenarios.
 
 ## Environment
+
 A set of TPC-H test data has been included as seeds to test the validity of primary keys, unique keys, and foreign keys.
 
 ## Running the tests
+
 1. Set up a `dbt_constraints` profile in your ~/.dbt/profiles.yml to a Snowflake or PostgreSQL schema you can create tables and views in.
 2. Execute `dbt seed`
 3. Execute `dbt build`
 
 A successful execution of the project should result in the following messages about constraints being created:
+
 ```
 Creating primary key: fact_order_line_missing_orders_l_linenumber_l_orderkey_PK
 Creating primary key: dim_customers_c_custkey_PK
@@ -32,6 +36,7 @@ Creating foreign key: fact_order_line_l_orderkey_FK referencing dim_orders ['o_o
 ```
 
 Also, 4 errors should be reported by models that have been designed to test failures with messages like the following:
+
 ```
 Completed with 4 warnings:
 Warning in test dbt_constraints_unique_key_dim_duplicate_orders_o_orderkey_HASH (models/schema.yml)
