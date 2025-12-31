@@ -250,13 +250,13 @@
 {#- This macro that checks if a test or its model has always_create_constraint set -#}
 {%- macro should_always_create_constraint(test_model) -%}
     {%- if test_model.config.get("always_create_constraint", "false")|string|lower == "true"
-        or test_model.config.meta.get("always_create_constraint", "false")|string|lower == "true" -%}
+        or (test_model.config.meta or {}).get("always_create_constraint", "false")|string|lower == "true" -%}
         {{ return(true) }}
     {%- endif -%}
     {%- for table_node in test_model.depends_on.nodes -%}
         {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
             if node.config.get("always_create_constraint", "false")|string|lower == "true"
-            or node.config.meta.get("always_create_constraint", "false")|string|lower == "true" -%}
+            or (node.config.meta or {}).get("always_create_constraint", "false")|string|lower == "true" -%}
             {{ return(true) }}
         {%- endfor -%}
     {%- endfor -%}
