@@ -1,16 +1,15 @@
 services:
-  dbt-snowflake:
+  dbt-fusion:
     build:
       context: ../../../../
-      dockerfile: integration_tests/automated_tests/docker/build/Dockerfile
+      dockerfile: integration_tests/automated_tests/docker/build/Dockerfile.fusion
       args:
-        DBT_ADAPTER: snowflake
-        DBT_VERSION: ${DBT_VERSION:-1.9.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-snowflake
+        DBT_VERSION: ${DBT_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-fusion
     environment:
       DBT_TARGET: snowflake
-      DBT_PROJECT_DIR: /project/integration_tests/dbt-core
-      DBT_PROFILES_DIR: /project/integration_tests/dbt-core
+      DBT_PROJECT_DIR: /project/integration_tests/dbt-fusion
+      DBT_PROFILES_DIR: /project/integration_tests/dbt-fusion
       SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
       SNOWFLAKE_USER: ${SNOWFLAKE_USER}
       SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD:-}
@@ -22,6 +21,5 @@ services:
       SNOWFLAKE_THREADS: ${SNOWFLAKE_THREADS:-8}
     volumes:
       - ../../../../:/project
-      - ../../../.dockerenv/profiles.yml:/project/integration_tests/dbt-core/profiles.yml
-      - /Users/dflippo/.ssh:/Users/dflippo/.ssh:ro
-    working_dir: /project/integration_tests/dbt-core
+      - ${HOME}/.ssh:${HOME}/.ssh:ro
+    working_dir: /project/integration_tests/dbt-fusion

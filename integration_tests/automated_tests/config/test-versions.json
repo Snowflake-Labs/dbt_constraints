@@ -4,7 +4,8 @@
     "postgres": ["1.8.0", "1.9.0"],
     "oracle": ["1.8.0", "1.9.0"],
     "sqlserver": ["1.8.0", "1.9.0"],
-    "snowflake": ["1.5.0", "1.8.0", "1.9.0", "1.10.0"]
+    "snowflake": ["1.5.0", "1.8.0", "1.9.0", "1.10.0"],
+    "fusion": ["latest"]
   },
   "adapters": {
     "postgres": {
@@ -22,6 +23,11 @@
     "snowflake": {
       "package": "dbt-snowflake",
       "image": null
+    },
+    "fusion": {
+      "package": "dbt-fusion",
+      "image": null,
+      "comment": "dbt Fusion - next-gen dbt engine, uses Snowflake credentials"
     }
   }
 }

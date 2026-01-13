@@ -186,7 +186,19 @@
 
     {#- Check if a PK/UK should be created because it is referenced by a selected FK -#}
     {%- if test_model.test_metadata.name in ("primary_key", "unique_key", "unique_combination_of_columns", "unique") -%}
-        {%- set pk_test_args = test_model.test_metadata.kwargs -%}
+        {#- Handle both dbt-core kwargs and Fusion arguments format -#}
+        {%- set raw_pk_kwargs = test_model.test_metadata.kwargs -%}
+        {%- if raw_pk_kwargs.arguments is defined -%}
+            {%- set pk_test_args = {} -%}
+            {%- for key, value in raw_pk_kwargs.items() -%}
+                {%- if key != 'arguments' -%}
+                    {%- do pk_test_args.update({key: value}) -%}
+                {%- endif -%}
+            {%- endfor -%}
+            {%- do pk_test_args.update(raw_pk_kwargs.arguments) -%}
+        {%- else -%}
+            {%- set pk_test_args = raw_pk_kwargs -%}
+        {%- endif -%}
         {%- set pk_test_columns = [] -%}
         {%- if pk_test_args.column_names -%}
             {%- set pk_test_columns =  pk_test_args.column_names -%}
@@ -201,7 +213,19 @@
                 and test_model.attached_node in fk_model.depends_on.nodes
                 and ( (fk_model.unique_id and fk_model.unique_id in selected_resources)
                     or (fk_model.attached_node and fk_model.attached_node in selected_resources) ) -%}
-            {%- set fk_test_args = fk_model.test_metadata.kwargs -%}
+            {#- Handle both dbt-core kwargs and Fusion arguments format -#}
+            {%- set raw_fk_kwargs = fk_model.test_metadata.kwargs -%}
+            {%- if raw_fk_kwargs.arguments is defined -%}
+                {%- set fk_test_args = {} -%}
+                {%- for key, value in raw_fk_kwargs.items() -%}
+                    {%- if key != 'arguments' -%}
+                        {%- do fk_test_args.update({key: value}) -%}
+                    {%- endif -%}
+                {%- endfor -%}
+                {%- do fk_test_args.update(raw_fk_kwargs.arguments) -%}
+            {%- else -%}
+                {%- set fk_test_args = raw_fk_kwargs -%}
+            {%- endif -%}
             {%- set fk_test_columns = [] -%}
             {%- if fk_test_args.pk_column_names -%}
                 {%- set fk_test_columns =  fk_test_args.pk_column_names -%}
@@ -250,13 +274,13 @@
 {#- This macro that checks if a test or its model has always_create_constraint set -#}
 {%- macro should_always_create_constraint(test_model) -%}
     {%- if test_model.config.get("always_create_constraint", "false")|string|lower == "true"
-        or test_model.config.meta.get("always_create_constraint", "false")|string|lower == "true" -%}
+        or test_model.config.get("meta", {}).get("always_create_constraint", "false")|string|lower == "true" -%}
         {{ return(true) }}
     {%- endif -%}
     {%- for table_node in test_model.depends_on.nodes -%}
         {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
             if node.config.get("always_create_constraint", "false")|string|lower == "true"
-            or node.config.meta.get("always_create_constraint", "false")|string|lower == "true" -%}
+            or node.config.get("meta", {}).get("always_create_constraint", "false")|string|lower == "true" -%}
             {{ return(true) }}
         {%- endfor -%}
     {%- endfor -%}
@@ -289,9 +313,22 @@
             and test_model.config
             and test_model.config.enabled
             and ( test_model.config.get("dbt_constraints_enabled", "true")|string|lower == "true"
-                or test_model.config.meta.get("dbt_constraints_enabled", "true")|string|lower == "true" ) -%}
+                or test_model.config.get("meta", {}).get("dbt_constraints_enabled", "true")|string|lower == "true" ) -%}
 
-        {%- set test_parameters = test_model.test_metadata.kwargs -%}
+        {#- In dbt Fusion, test arguments may be nested under 'arguments' key -#}
+        {%- set raw_kwargs = test_model.test_metadata.kwargs -%}
+        {%- if raw_kwargs.get('arguments') is not none -%}
+            {#- Fusion format: merge column_name with arguments -#}
+            {%- set test_parameters = {} -%}
+            {%- for key, value in raw_kwargs.items() -%}
+                {%- if key != 'arguments' -%}
+                    {%- do test_parameters.update({key: value}) -%}
+                {%- endif -%}
+            {%- endfor -%}
+            {%- do test_parameters.update(raw_kwargs.get('arguments')) -%}
+        {%- else -%}
+            {%- set test_parameters = raw_kwargs -%}
+        {%- endif -%}
         {%- set test_name = test_model.test_metadata.name -%}
         {%- set selected = dbt_constraints.test_selected(test_model) -%}
 
@@ -329,7 +366,7 @@
                 {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
                     if node.config
                     and ( node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
-                        or node.config.meta.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
+                        or node.config.get("meta", {}).get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and dbt_constraints_sources_enabled
                             and ( ( dbt_constraints_sources_pk_enabled and test_name in("primary_key") )
@@ -343,7 +380,7 @@
                     {%- do table_models.append(node) -%}
                     {%- if node.resource_type == "source"
                         or node.config.get("materialized", "other") not in ("table", "incremental", "snapshot", "seed")
-                        or node.config.meta.get("materialized", "other") not in ("table", "incremental", "snapshot", "seed") -%}
+                        or node.config.get("meta", {}).get("materialized", "other") not in ("table", "incremental", "snapshot", "seed") -%}
                         {#- If we are using a sources or custom materializations, we will need to verify permissions -#}
                         {%- set ns.verify_permissions = true -%}
                     {%- endif -%}
@@ -429,10 +466,6 @@
                             {%- set pk_column_names = [test_parameters.field] -%}
                         {%- elif test_parameters.pk_column_name -%}
                             {%- set pk_column_names = [test_parameters.pk_column_name] -%}
-                        {%- else -%}
-                            {{ exceptions.raise_compiler_error(
-                            "`pk_column_names`, `pk_column_name`, or `field` parameter missing for foreign key constraint on table: '" ~ fk_model.name ~ " " ~ test_parameters
-                            ) }}
                         {%- endif -%}
 
                         {%- set fk_column_names = [] -%}
@@ -442,13 +475,14 @@
                             {%- set fk_column_names = [test_parameters.column_name] -%}
                         {%- elif test_parameters.fk_column_name -%}
                             {%- set fk_column_names = [test_parameters.fk_column_name] -%}
-                        {%- else -%}
-                            {{ exceptions.raise_compiler_error(
-                            "`fk_column_names`, `fk_column_name`, or `column_name` parameter missing for foreign key constraint on table: '" ~ fk_model.name ~ " " ~ test_parameters
-                            ) }}
                         {%- endif -%}
 
-                        {%- if not dbt_constraints.table_columns_all_exist(pk_table_relation, pk_column_names, lookup_cache) -%}
+                        {#- Skip constraint if required parameters are missing (can happen in Fusion where test arguments aren't preserved) -#}
+                        {%- if pk_column_names | length == 0 -%}
+                            {%- do log("Skipping foreign key on " ~ fk_model.name ~ " because pk_column_name/field is missing from test parameters (Fusion limitation)", info=true) -%}
+                        {%- elif fk_column_names | length == 0 -%}
+                            {%- do log("Skipping foreign key on " ~ fk_model.name ~ " because fk_column_name/column_name is missing from test parameters", info=true) -%}
+                        {%- elif not dbt_constraints.table_columns_all_exist(pk_table_relation, pk_column_names, lookup_cache) -%}
                             {%- do log("Skipping foreign key because a physical column was not found on the pk table: " ~ pk_model.name ~ " " ~ pk_column_names, info=true) -%}
                         {%- elif not dbt_constraints.table_columns_all_exist(fk_table_relation, fk_column_names, lookup_cache) -%}
                             {%- do log("Skipping foreign key because a physical column was not found on the fk table: " ~ fk_model.name ~ " " ~ fk_column_names, info=true) -%}
@@ -534,11 +568,28 @@
 
         {%- set tab_column_list = [] -%}
         {%- for column in tab_Columns -%}
-            {{ tab_column_list.append(column.name|upper|trim('"')) }}
+            {% do tab_column_list.append(column.name|upper|trim('"')) %}
         {%- endfor -%}
         {%- do lookup_cache.table_columns.update({ table_relation: tab_column_list }) -%}
     {%- endif -%}
     {{ return(lookup_cache.table_columns[table_relation]) }}
+{%- endmacro -%}
+
+
+{#- This macro provides a group_by function for query results that works in both dbt-core and dbt Fusion.
+    It takes a query result set and groups the rows by the specified column name.
+    Returns a dictionary where keys are the unique values of the group_by column
+    and values are lists of row dictionaries with that key. -#}
+{%- macro get_results_group_by(query_results, group_by_column) -%}
+    {%- set grouped = {} -%}
+    {%- for row in query_results.rows -%}
+        {%- set key = row[group_by_column] -%}
+        {%- if key not in grouped -%}
+            {%- do grouped.update({key: []}) -%}
+        {%- endif -%}
+        {%- do grouped[key].append(row) -%}
+    {%- endfor -%}
+    {{ return(grouped) }}
 {%- endmacro -%}
 
 

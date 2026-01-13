@@ -106,7 +106,7 @@ select validation_errors.* from (
     {%- elif quote_columns -%}
         {%- set column_list=[] -%}
         {%- for column in column_array -%}
-            {%- set column_list = column_list.append( adapter.quote(column) ) -%}
+            {%- do column_list.append( adapter.quote(column) ) -%}
         {%- endfor -%}
     {%- else -%}
         {{ exceptions.raise_compiler_error(
@@ -133,7 +133,7 @@ select validation_errors.* from (
 
     {%- set prefixed_column_list = [] -%}
     {%- for x in range(column_list|count) -%}
-        {%- set prefixed_column_list = prefixed_column_list.append( prefix_alias ~ '.' ~ column_list[x] ) -%}
+        {%- do prefixed_column_list.append( prefix_alias ~ '.' ~ column_list[x] ) -%}
     {%- endfor -%}
     {{ return(prefixed_column_list) }}
 {%- endmacro -%}
@@ -145,7 +145,7 @@ select validation_errors.* from (
 
     {%- set join_conditions = [] -%}
     {%- for x in range(column_list_left|count) -%}
-        {%- set join_conditions = join_conditions.append( column_list_left[x] ~ ' = ' ~ column_list_right[x] ) -%}
+        {%- do join_conditions.append( column_list_left[x] ~ ' = ' ~ column_list_right[x] ) -%}
     {%- endfor -%}
     {{ return(join_conditions) }}
 {%- endmacro -%}

@@ -9,8 +9,8 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-oracle
     environment:
       DBT_TARGET: oracle
-      DBT_PROJECT_DIR: /project/integration_tests
-      DBT_PROFILES_DIR: /project/integration_tests/.dockerenv
+      DBT_PROJECT_DIR: /project/integration_tests/dbt-core
+      DBT_PROFILES_DIR: /project/integration_tests/dbt-core
       ORACLE_USER: ${ORACLE_USER}
       ORACLE_PASSWORD: ${ORACLE_PASSWORD}
       ORACLE_HOST: dbt-test-db-oracle
@@ -19,10 +19,10 @@ services:
       ORACLE_SERVICE_NAME: ${ORACLE_SERVICE_NAME:-FREEPDB1}
     volumes:
       - ../../../../:/project
-      - ../../../.dockerenv:/project/integration_tests/.dockerenv
+      - ../../../.dockerenv/profiles.yml:/project/integration_tests/dbt-core/profiles.yml
     networks:
       - test-network
-    working_dir: /project/integration_tests
+    working_dir: /project/integration_tests/dbt-core
 
 networks:
   test-network:

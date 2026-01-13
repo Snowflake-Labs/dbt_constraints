@@ -106,7 +106,7 @@
         {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
-                {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+                {%- do modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}
@@ -153,12 +153,15 @@
     {%- endset -%}
     {%- set constraint_list = run_query(lookup_query) -%}
     {%- if constraint_list.columns["column_name"].values() | count > 0 -%}
-        {%- for constraint in constraint_list.group_by("constraint_name") -%}
+        {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "constraint_name") -%}
+        {%- for c_name, c_rows in constraint_map.items() -%}
+            {%- set columns = [] -%}
+            {%- for row in c_rows -%}
+                {%- do columns.append(row["column_name"]) -%}
+            {%- endfor -%}
             {#- Add this constraint to the lookup cache -#}
-            {%- do lookup_cache.unique_keys.update({table_relation: {constraint.key_name: constraint.columns["column_name"].values()} }) -%}
-        {% endfor %}
-        {%- for constraint in constraint_list.group_by("constraint_name") -%}
-            {%- if dbt_constraints.column_list_matches(constraint.columns["column_name"].values(), column_names ) -%}
+            {%- do lookup_cache.unique_keys.update({table_relation: {c_name: columns} }) -%}
+            {%- if dbt_constraints.column_list_matches(columns, column_names ) -%}
                 {%- do log("Found UK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
                 {{ return(true) }}
             {%- endif -%}
@@ -176,12 +179,15 @@
     {%- endset -%}
     {%- set constraint_list = run_query(lookup_query) -%}
     {%- if constraint_list.columns["column_name"].values() | count > 0 -%}
-        {%- for constraint in constraint_list.group_by("constraint_name") -%}
+        {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "constraint_name") -%}
+        {%- for c_name, c_rows in constraint_map.items() -%}
+            {%- set columns = [] -%}
+            {%- for row in c_rows -%}
+                {%- do columns.append(row["column_name"]) -%}
+            {%- endfor -%}
             {#- Add this constraint to the lookup cache -#}
-            {%- do lookup_cache.unique_keys.update({table_relation: {constraint.key_name: constraint.columns["column_name"].values()} }) -%}
-        {% endfor %}
-        {%- for constraint in constraint_list.group_by("constraint_name") -%}
-            {%- if dbt_constraints.column_list_matches(constraint.columns["column_name"].values(), column_names ) -%}
+            {%- do lookup_cache.unique_keys.update({table_relation: {c_name: columns} }) -%}
+            {%- if dbt_constraints.column_list_matches(columns, column_names ) -%}
                 {%- do log("Found PK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
                 {{ return(true) }}
             {%- endif -%}
@@ -220,12 +226,15 @@
     {%- endset -%}
     {%- set constraint_list = run_query(lookup_query) -%}
     {%- if constraint_list.columns["fk_column_name"].values() | count > 0 -%}
-        {%- for constraint in constraint_list.group_by("fk_name") -%}
+        {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "fk_name") -%}
+        {%- for c_name, c_rows in constraint_map.items() -%}
+            {%- set columns = [] -%}
+            {%- for row in c_rows -%}
+                {%- do columns.append(row["fk_column_name"]) -%}
+            {%- endfor -%}
             {#- Add this constraint to the lookup cache -#}
-            {%- do lookup_cache.foreign_keys.update({table_relation: {constraint.key_name: constraint.columns["fk_column_name"].values()} }) -%}
-        {% endfor %}
-        {%- for constraint in constraint_list.group_by("fk_name") -%}
-            {%- if dbt_constraints.column_list_matches(constraint.columns["fk_column_name"].values(), column_names ) -%}
+            {%- do lookup_cache.foreign_keys.update({table_relation: {c_name: columns} }) -%}
+            {%- if dbt_constraints.column_list_matches(columns, column_names ) -%}
                 {%- do log("Found FK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
                 {{ return(true) }}
             {%- endif -%}

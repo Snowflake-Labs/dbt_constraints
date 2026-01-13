@@ -154,7 +154,7 @@
             {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
             {%- set modify_statements= [] -%}
             {%- for column in columns_list -%}
-                {%- set modify_statements = modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
+                {%- do modify_statements.append( "COLUMN " ~ column ~ " SET NOT NULL" ) -%}
             {%- endfor -%}
             {%- set modify_statement_csv = modify_statements | join(", ") -%}
             {%- set query -%}
@@ -212,14 +212,18 @@ SHOW UNIQUE KEYS IN TABLE {{ table_relation }}
 {%- endset -%}
 {%- set constraint_list = run_query(lookup_query) -%}
 {%- if constraint_list.columns["column_name"].values() | count > 0 -%}
-    {%- for constraint in constraint_list.group_by("constraint_name") -%}
-        {%- set existing_constraint_name = (constraint.columns["constraint_name"].values() | first) -%}
-        {%- set existing_columns = constraint.columns["column_name"].values() -%}
-        {%- set existing_rely = (constraint.columns["rely"].values() | first) -%}
+    {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "constraint_name") -%}
+
+    {%- for c_name, c_rows in constraint_map.items() -%}
+        {%- set columns = [] -%}
+        {%- for row in c_rows -%}
+            {%- do columns.append(row["column_name"]) -%}
+        {%- endfor -%}
+
         {#- Add this constraint to the lookup cache -#}
-        {%- do lookup_cache.unique_keys[table_relation].update( {existing_constraint_name:
-            {   "columns": existing_columns,
-                "rely": existing_rely } }) -%}
+        {%- do lookup_cache.unique_keys[table_relation].update( {c_name:
+            {   "columns": columns,
+                "rely": c_rows[0]["rely"] } }) -%}
     {% endfor %}
 {%- endif -%}
 
@@ -228,14 +232,18 @@ SHOW PRIMARY KEYS IN TABLE {{ table_relation }}
 {%- endset -%}
 {%- set constraint_list = run_query(lookup_query) -%}
 {%- if constraint_list.columns["column_name"].values() | count > 0 -%}
-    {%- for constraint in constraint_list.group_by("constraint_name") -%}
-        {%- set existing_constraint_name = (constraint.columns["constraint_name"].values() | first) -%}
-        {%- set existing_columns = constraint.columns["column_name"].values() -%}
-        {%- set existing_rely = (constraint.columns["rely"].values() | first) -%}
+    {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "constraint_name") -%}
+
+    {%- for c_name, c_rows in constraint_map.items() -%}
+        {%- set columns = [] -%}
+        {%- for row in c_rows -%}
+            {%- do columns.append(row["column_name"]) -%}
+        {%- endfor -%}
+
         {#- Add this constraint to the lookup cache -#}
-        {%- do lookup_cache.unique_keys[table_relation].update( {existing_constraint_name:
-            {   "columns": existing_columns,
-                "rely": existing_rely } }) -%}
+        {%- do lookup_cache.unique_keys[table_relation].update( {c_name:
+            {   "columns": columns,
+                "rely": c_rows[0]["rely"] } }) -%}
     {% endfor %}
 {%- endif -%}
 
@@ -276,14 +284,18 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
 {%- endset -%}
 {%- set constraint_list = run_query(lookup_query) -%}
 {%- if constraint_list.columns["fk_column_name"].values() | count > 0 -%}
-    {%- for constraint in constraint_list.group_by("fk_name") -%}
-        {%- set existing_constraint_name = (constraint.columns["fk_name"].values() | first) -%}
-        {%- set existing_columns = constraint.columns["fk_column_name"].values() -%}
-        {%- set existing_rely = (constraint.columns["rely"].values() | first) -%}
+    {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "fk_name") -%}
+
+    {%- for c_name, c_rows in constraint_map.items() -%}
+        {%- set columns = [] -%}
+        {%- for row in c_rows -%}
+            {%- do columns.append(row["fk_column_name"]) -%}
+        {%- endfor -%}
+
         {#- Add this constraint to the lookup cache -#}
-        {%- do lookup_cache.foreign_keys[table_relation].update( {existing_constraint_name:
-            {   "columns": existing_columns,
-                "rely": existing_rely } }) -%}
+        {%- do lookup_cache.foreign_keys[table_relation].update( {c_name:
+            {   "columns": columns,
+                "rely": c_rows[0]["rely"] } }) -%}
     {% endfor %}
 {%- endif -%}
 

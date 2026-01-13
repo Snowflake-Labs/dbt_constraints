@@ -1,0 +1,76 @@
+
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'dbt_constraints_integration_tests'
+version: '1.0.0'
+config-version: 2
+
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'dbt_constraints'
+
+# These configurations specify where dbt should look for different types of files.
+# The `source-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analysis"]
+test-paths: ["tests"]
+seed-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+  - "dbt_modules"
+  - "logs"
+
+
+
+# Global variables
+vars:
+  # The package can be temporarily disabled using this variable
+  dbt_constraints_enabled: true
+
+  # You can control which types of constraints are enabled globally
+  dbt_constraints_pk_enabled: true
+  dbt_constraints_uk_enabled: true
+  dbt_constraints_fk_enabled: true
+  dbt_constraints_nn_enabled: true
+
+  # The package can also add constraints on sources if you have sufficient privileges
+  dbt_constraints_sources_enabled: true
+
+  # You can also be specific on which constraints are enabled for sources
+  # You must also enable dbt_constraints_sources_enabled above
+  dbt_constraints_sources_pk_enabled: true
+  dbt_constraints_sources_uk_enabled: true
+  dbt_constraints_sources_fk_enabled: true
+
+  # Enable this parameter if you want to skip using RELY for join elimination
+  dbt_constraints_always_norely: false
+
+#on-run-start:
+  #- 'drop table if exists dbt_demo.dim_orders CASCADE'
+
+models:
+  +materialized: table
+
+seeds:
+  +quote_columns: false
+  +post-hook: "{{ clone_table('source_') }}"
+  +full_refresh: false
+
+tests:
+  dbt_constraints_integration_tests:
+    # Fusion requires configuration in meta block
+    +meta:
+      always_create_constraint: true
+    # These configuration settings disable running tests or just constraints by path
+    # +enabled: false
+    #+dbt_constraints_enabled: false
+
+flags:
+  # Fusion requires the new test arguments format
+  require_generic_test_arguments_property: true

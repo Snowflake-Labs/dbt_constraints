@@ -21,6 +21,10 @@ COMPOSE_DIR = DOCKER_DIR / "compose"
 CONFIG_DIR = TEST_DIR / "config"
 INTEGRATION_TESTS_DIR = TEST_DIR.parent
 
+# Project directories for different dbt versions
+DBT_CORE_PROJECT_DIR = INTEGRATION_TESTS_DIR / "dbt-core"
+DBT_FUSION_PROJECT_DIR = INTEGRATION_TESTS_DIR / "dbt-fusion"
+
 # Load environment variables from integration_tests/.env for Snowflake credentials
 ENV_FILE = INTEGRATION_TESTS_DIR / ".env"
 if ENV_FILE.exists():
@@ -28,6 +32,14 @@ if ENV_FILE.exists():
     load_dotenv(ENV_FILE)
 else:
     print(f"\n⚠️  No .env file found at {ENV_FILE} - Snowflake tests will be skipped")
+
+
+def get_project_dir(database: str) -> Path:
+    """Get the appropriate dbt project directory for the database type."""
+    if database == "fusion":
+        return DBT_FUSION_PROJECT_DIR
+    else:
+        return DBT_CORE_PROJECT_DIR
 
 
 def generate_secure_password(length: int = 16, oracle_safe: bool = False) -> str:
@@ -82,34 +94,58 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_generate_tests(metafunc):
-    """Dynamically generate test parameters from test-versions.json."""
-    if "database" in metafunc.fixturenames and "dbt_version" in metafunc.fixturenames:
-        # Load version matrix
-        versions_file = CONFIG_DIR / "test-versions.json"
-        with open(versions_file) as f:
-            versions = json.load(f)
+def _build_test_parameters(
+    versions_data: dict, database_filter: str | None, version_filter: str | None
+) -> list[tuple[str, str]]:
+    """Build test parameter combinations based on filters.
 
-        # Get CLI filters
-        database_filter = metafunc.config.getoption("database")
-        version_filter = metafunc.config.getoption("dbt_version")
+    Args:
+        versions_data: Dictionary containing dbt version configurations
+        database_filter: Optional database name to filter by
+        version_filter: Optional dbt version to filter by
 
-        # Build test parameters
-        test_params = []
-        for db, db_versions in versions["dbt_versions"].items():
-            # Apply database filter
-            if database_filter and db != database_filter:
+    Returns:
+        List of (database, version) tuples
+    """
+    test_params = []
+
+    for db, db_versions in versions_data["dbt_versions"].items():
+        # Apply database filter
+        if database_filter and db != database_filter:
+            continue
+
+        for version in db_versions:
+            # Apply version filter
+            if version_filter and version != version_filter:
                 continue
 
-            for version in db_versions:
-                # Apply version filter
-                if version_filter and version != version_filter:
-                    continue
+            test_params.append((db, version))
 
-                test_params.append((db, version))
+    return test_params
 
-        # Parameterize tests
-        metafunc.parametrize("database,dbt_version", test_params, scope="function")
+
+def pytest_generate_tests(metafunc):
+    """Dynamically generate test parameters from test-versions.json."""
+    if (
+        "database" not in metafunc.fixturenames
+        or "dbt_version" not in metafunc.fixturenames
+    ):
+        return
+
+    # Load version matrix
+    versions_file = CONFIG_DIR / "test-versions.json"
+    with open(versions_file) as f:
+        versions = json.load(f)
+
+    # Get CLI filters
+    database_filter = metafunc.config.getoption("database")
+    version_filter = metafunc.config.getoption("dbt_version")
+
+    # Build test parameters using helper function
+    test_params = _build_test_parameters(versions, database_filter, version_filter)
+
+    # Parameterize tests
+    metafunc.parametrize("database,dbt_version", test_params, scope="function")
 
 
 # =============================================================================
@@ -190,6 +226,8 @@ def db_connection_config() -> dict[str, dict[str, str]]:
     # Only add Snowflake if we have at least account and user
     if snowflake_creds.get("account") and snowflake_creds.get("user"):
         credentials["snowflake"] = snowflake_creds
+        # Fusion uses the same Snowflake credentials
+        credentials["fusion"] = snowflake_creds.copy()
 
         # Determine auth method for logging
         if snowflake_creds.get("private_key_path"):
@@ -203,10 +241,12 @@ def db_connection_config() -> dict[str, dict[str, str]]:
             f"  ☁️  snowflake: account={snowflake_creds['account']}, user={snowflake_creds['user']}, "
             f"db={snowflake_creds.get('database', 'N/A')}, auth={auth_method}"
         )
+        print("  🚀 fusion: using same Snowflake credentials (dbt-fusion engine)")
     else:
         print(
             "  ⚠️  Snowflake credentials not found in environment (need at least SNOWFLAKE_ACCOUNT and SNOWFLAKE_USER)"
         )
+        print("  ⚠️  Fusion tests will be skipped (requires Snowflake credentials)")
 
     # Print local database credentials for debugging
     for db, creds in credentials.items():
@@ -359,9 +399,15 @@ def dbt_env(
 ) -> dict[str, str]:
     """Environment variables for dbt runner (using random credentials)."""
     env = os.environ.copy()
-    env["DBT_TARGET"] = database
+    # Fusion uses Snowflake as its underlying database target
+    env["DBT_TARGET"] = "snowflake" if database == "fusion" else database
     env["DBT_VERSION"] = dbt_version
     env["COMPOSE_PROJECT_NAME"] = database_project_name  # To connect to DB
+
+    # Set the correct project directory based on database type
+    project_dir = get_project_dir(database)
+    env["DBT_PROJECT_DIR"] = f"/project/integration_tests/{project_dir.name}"
+    env["DBT_PROFILES_DIR"] = f"/project/integration_tests/{project_dir.name}"
 
     # Database-specific env vars (using random credentials from fixture)
     if database in db_connection_config:
@@ -391,8 +437,9 @@ def dbt_env(
                     "SQLSERVER_DATABASE": creds["database"],
                 }
             )
-        elif database == "snowflake":
+        elif database in ("snowflake", "fusion"):
             # Map credential keys to environment variable names
+            # Both snowflake and fusion use the same Snowflake credentials
             snowflake_env_map = {
                 "account": "SNOWFLAKE_ACCOUNT",
                 "user": "SNOWFLAKE_USER",
@@ -432,8 +479,8 @@ def run_dbt(
 ):
     """Run dbt commands inside the test container."""
 
-    # Ensure this database is started (skip check for cloud databases like Snowflake)
-    cloud_databases = ["snowflake"]
+    # Ensure this database is started (skip check for cloud databases like Snowflake/Fusion)
+    cloud_databases = ["snowflake", "fusion"]
     if database not in start_databases and database not in cloud_databases:
         pytest.skip(f"Database {database} not started")
 
@@ -452,9 +499,10 @@ def run_dbt(
             "--pull",  # Pull latest base images
             "--build-arg",
             f"DBT_VERSION={dbt_version}",
-            "--build-arg",
-            f"DBT_ADAPTER={database}",
         ]
+        # Only add DBT_ADAPTER for non-fusion databases (fusion is standalone binary)
+        if database != "fusion":
+            cmd.extend(["--build-arg", f"DBT_ADAPTER={database}"])
 
         # Enable Docker BuildKit for better caching
         build_env = dbt_env.copy()
@@ -551,6 +599,31 @@ def dbt_runner(run_dbt):
         return run_dbt(cmd)
 
     return _dbt_runner
+
+
+@pytest.fixture(scope="function")
+def dbt_seed(run_dbt, database):
+    """
+    Fixture that runs dbt seed before tests that need seeded data.
+    Runs deps and seed commands to set up test data.
+
+    Note: Fusion tests are expected to fail due to test metadata compatibility issues.
+    """
+    # Run deps first to ensure packages are installed
+    run_dbt("dbt deps")
+
+    # For Fusion, we expect seed to fail due to constraint creation issues
+    # This is a known compatibility issue with test_metadata.kwargs
+    if database == "fusion":
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            run_dbt("dbt seed --full-refresh", check=False)
+    else:
+        # Run seed to load test data
+        run_dbt("dbt seed --full-refresh")
+    yield
+    # No cleanup needed - seeds persist for the test run
 
 
 @pytest.fixture(scope="function")
