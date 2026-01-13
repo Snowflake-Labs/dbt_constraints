@@ -93,13 +93,18 @@
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {%- set constraint_list = run_query(lookup_query) -%}
     {%- if constraint_list.columns["column_name"].values() | count > 0 -%}
-        {%- for constraint in constraint_list.group_by("constraint_name") -%}
-            {%- if dbt_constraints.column_list_matches(constraint.columns["column_name"].values(), column_names ) -%}
+        {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "constraint_name") -%}
+        {%- for c_name, c_rows in constraint_map.items() -%}
+            {%- set columns = [] -%}
+            {%- for row in c_rows -%}
+                {%- do columns.append(row["column_name"]) -%}
+            {%- endfor -%}
+            {%- if dbt_constraints.column_list_matches(columns, column_names ) -%}
                 {%- do log("Found PK/UK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
                 {{ return(true) }}
             {%- endif -%}
         {% endfor %}
-    {%- endif -%}#}
+    {%- endif -%}
 
     {#- If we get this far then the table does not have either constraint -#}
     {%- do log("No PK/UK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
@@ -127,8 +132,13 @@
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {%- set constraint_list = run_query(lookup_query) -%}
     {%- if constraint_list.columns["fk_column_name"].values() | count > 0 -%}
-        {%- for constraint in constraint_list.group_by("fk_name") -%}
-            {%- if dbt_constraints.column_list_matches(constraint.columns["fk_column_name"].values(), column_names ) -%}
+        {%- set constraint_map = dbt_constraints.get_results_group_by(constraint_list, "fk_name") -%}
+        {%- for c_name, c_rows in constraint_map.items() -%}
+            {%- set columns = [] -%}
+            {%- for row in c_rows -%}
+                {%- do columns.append(row["fk_column_name"]) -%}
+            {%- endfor -%}
+            {%- if dbt_constraints.column_list_matches(columns, column_names ) -%}
                 {%- do log("Found FK key: " ~ table_relation ~ " " ~ column_names, info=false) -%}
                 {{ return(true) }}
             {%- endif -%}
