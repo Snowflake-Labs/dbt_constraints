@@ -9,8 +9,8 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-sqlserver
     environment:
       DBT_TARGET: sqlserver
-      DBT_PROJECT_DIR: /project/integration_tests
-      DBT_PROFILES_DIR: /project/integration_tests/.dockerenv
+      DBT_PROJECT_DIR: /project/integration_tests/dbt-core
+      DBT_PROFILES_DIR: /project/integration_tests/dbt-core
       SQLSERVER_HOST: dbt-test-db-sqlserver
       SQLSERVER_PORT: 1433
       SQLSERVER_USER: sa
@@ -18,10 +18,10 @@ services:
       SQLSERVER_DATABASE: ${SQLSERVER_DATABASE}
     volumes:
       - ../../../../:/project
-      - ../../../.dockerenv:/project/integration_tests/.dockerenv
+      - ../../../.dockerenv/profiles.yml:/project/integration_tests/dbt-core/profiles.yml
     networks:
       - test-network
-    working_dir: /project/integration_tests
+    working_dir: /project/integration_tests/dbt-core
 
 networks:
   test-network:

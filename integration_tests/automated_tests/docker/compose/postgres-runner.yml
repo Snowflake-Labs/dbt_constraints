@@ -9,8 +9,8 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-dbt-postgres
     environment:
       DBT_TARGET: postgres
-      DBT_PROJECT_DIR: /project/integration_tests
-      DBT_PROFILES_DIR: /project/integration_tests/.dockerenv
+      DBT_PROJECT_DIR: /project/integration_tests/dbt-core
+      DBT_PROFILES_DIR: /project/integration_tests/dbt-core
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -18,10 +18,10 @@ services:
       POSTGRES_PORT: 5432
     volumes:
       - ../../../../:/project
-      - ../../../.dockerenv:/project/integration_tests/.dockerenv
+      - ../../../.dockerenv/profiles.yml:/project/integration_tests/dbt-core/profiles.yml
     networks:
       - test-network
-    working_dir: /project/integration_tests
+    working_dir: /project/integration_tests/dbt-core
 
 networks:
   test-network:
