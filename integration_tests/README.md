@@ -1,50 +1,115 @@
-# dbt Constraints Integration Tests
+# Integration Tests
 
-This set of models and associated tests is designed to test all the supported tests as well as most unsupported scenarios.
+This directory contains integration tests for the `dbt_constraints` package, split into two separate dbt projects to support both dbt-core and dbt Fusion.
 
-## Environment
-
-A set of TPC-H test data has been included as seeds to test the validity of primary keys, unique keys, and foreign keys.
-
-## Running the tests
-
-1. Set up a `dbt_constraints` profile in your ~/.dbt/profiles.yml to a Snowflake or PostgreSQL schema you can create tables and views in.
-2. Execute `dbt seed`
-3. Execute `dbt build`
-
-A successful execution of the project should result in the following messages about constraints being created:
+## Directory Structure
 
 ```
-Creating primary key: fact_order_line_missing_orders_l_linenumber_l_orderkey_PK
-Creating primary key: dim_customers_c_custkey_PK
-Creating primary key: dim_part_p_partkey_PK
-Creating primary key: fact_order_line_l_linenumber_l_orderkey_PK
-Creating unique key: dim_customers_c_custkey_HASH_UK
-Creating unique key: dim_customers_c_custkey_seq_UK
-Creating unique key: dim_part_p_partkey_HASH_UK
-Creating unique key: dim_part_p_partkey_seq_UK
-Creating unique key: dim_part_supplier_ps_partkey_ps_suppkey_UK
-Creating unique key: dim_orders_null_keys_o_orderkey_HASH_UK
-Creating unique key: fact_order_line_missing_orders_integration_id_UK
-Creating unique key: dim_orders_o_orderkey_UK
-Creating unique key: fact_order_line_integration_id_UK
-Creating foreign key: dim_orders_o_custkey_FK referencing dim_customers ['c_custkey']
-Skipping fact_order_line_missing_orders_l_partkey_l_suppkey_FK because a PK/UK was not found on the PK table: "DFLIPPO_DEV"."DBT_DEMO"."dim_part_supplier_missing_con" ['ps_partkey', 'ps_suppkey']
-Creating foreign key: fact_order_line_l_partkey_l_suppkey_FK referencing dim_part_supplier ['ps_partkey', 'ps_suppkey']
-Creating foreign key: dim_orders_null_keys_o_custkey_FK referencing dim_customers ['c_custkey']
-Creating foreign key: fact_order_line_l_orderkey_FK referencing dim_orders ['o_orderkey']
+integration_tests/
+├── dbt-core/              # dbt-core (v1.x) project
+│   ├── data/              # Seed data
+│   ├── models/            # Test models
+│   ├── macros/            # Test macros
+│   ├── dbt_project.yml    # dbt-core compatible config
+│   ├── packages.yml       # Package dependencies
+│   └── profiles.yml       # Connection profiles
+├── dbt-fusion/            # dbt Fusion (v2.x) project
+│   ├── data/              # Seed data (with arguments: wrapper)
+│   ├── models/            # Test models (with arguments: wrapper)
+│   ├── macros/            # Test macros
+│   ├── dbt_project.yml    # Fusion compatible config
+│   ├── packages.yml       # Package dependencies
+│   └── profiles.yml       # Connection profiles
+├── automated_tests/       # Pytest-based automation
+│   ├── tests/             # Test files
+│   ├── conftest.py        # Test configuration
+│   └── docker/            # Docker infrastructure
+├── .env                   # Snowflake credentials (not in git)
+└── .dockerenv/            # Docker-specific profiles
 ```
 
-Also, 4 errors should be reported by models that have been designed to test failures with messages like the following:
+## Why Two Projects?
 
+dbt Fusion (v2.x) enforces stricter YAML formatting than dbt-core (v1.x):
+
+### Key Differences
+
+| Feature | dbt-core | dbt Fusion |
+|---------|----------|------------|
+| Test arguments | Top-level | Must be in `arguments:` block |
+| Configuration | `+always_create_constraint` | Must be in `+meta:` block |
+| Flag required | No | `require_generic_test_arguments_property: true` |
+
+### Example
+
+**dbt-core format:**
+```yaml
+- relationships:
+    to: ref('parent')
+    field: parent_id
 ```
-Completed with 4 warnings:
-Warning in test dbt_constraints_unique_key_dim_duplicate_orders_o_orderkey_HASH (models/schema.yml)
-  Got 938 results, configured to warn if != 0
-Warning in test dbt_constraints_primary_key_dim_duplicate_orders_o_orderkey (models/schema.yml)
-  Got 938 results, configured to warn if != 0
-Warning in test dbt_constraints_foreign_key_fact_order_line_missing_orders_l_orderkey__o_orderkey__ref_dim_missing_orders_ (models/schema.yml)
-  Got 484 results, configured to warn if != 0
-Warning in test dbt_constraints_primary_key_dim_orders_null_keys_o_orderkey (models/schema.yml)
-  Got 1 result, configured to warn if != 0
+
+**dbt Fusion format:**
+```yaml
+- relationships:
+    arguments:
+      to: ref('parent')
+      field: parent_id
 ```
+
+## Running Tests Manually
+
+### dbt-core
+
+```bash
+cd integration_tests/dbt-core
+dbt deps
+dbt seed --full-refresh
+dbt run
+dbt test
+```
+
+### dbt Fusion
+
+```bash
+cd integration_tests/dbt-fusion
+dbt deps
+dbt seed --full-refresh  # Known to fail - see Fusion compatibility issue
+dbt run
+dbt test
+```
+
+## Automated Tests
+
+The automated test suite automatically uses the correct project based on the database being tested:
+
+```bash
+cd integration_tests/automated_tests
+
+# Test with dbt-core (Postgres example)
+pytest --database postgres
+
+# Test with dbt Fusion
+pytest --database fusion
+
+# Run all tests
+pytest
+```
+
+## Known Issues
+
+### dbt Fusion Compatibility
+
+⚠️ **Test Metadata Access Issue**
+
+dbt Fusion currently has a compatibility issue with the `dbt_constraints` package:
+
+- **Problem**: Test arguments are not included in `test_metadata.kwargs`
+- **Impact**: Constraint creation fails because parameters like `pk_column_name` cannot be accessed
+- **Status**: Being investigated
+
+The Fusion project is structured correctly with the required YAML format, but constraints cannot be created until this metadata access issue is resolved.
+
+## Git History
+
+The files in `dbt-core/` were moved using `git mv` to preserve git history. The `dbt-fusion/` project was copied from `dbt-core/` and modified with Fusion-compatible YAML formatting.

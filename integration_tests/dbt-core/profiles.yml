@@ -1,36 +1,50 @@
 dbt_constraints:
-  target: snowflake
+  target: "{{ env_var('DBT_TARGET', 'postgres') }}"
   outputs:
+    postgres:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER', 'dbt_test') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'testpass123') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'dbt_test') }}"
+      schema: dbt_constraints_test
+      threads: 4
+
+    oracle:
+      type: oracle
+      host: "{{ env_var('ORACLE_HOST', 'localhost') }}"
+      port: "{{ env_var('ORACLE_PORT', '1521') | as_number }}"
+      user: "{{ env_var('ORACLE_USER', 'dbt_test') }}"
+      password: "{{ env_var('ORACLE_PASSWORD', 'testpass123') }}"
+      service: "{{ env_var('ORACLE_SERVICE', 'FREEPDB1') }}"
+      database: "{{ env_var('ORACLE_SERVICE', 'FREEPDB1') }}"
+      schema: "{{ env_var('ORACLE_USER', 'dbt_test') | upper }}"
+      threads: 4
+      protocol: tcp
+
+    sqlserver:
+      type: sqlserver
+      host: "{{ env_var('SQLSERVER_HOST', 'localhost') }}"
+      port: "{{ env_var('SQLSERVER_PORT', '1433') | as_number }}"
+      user: "{{ env_var('SQLSERVER_USER', 'sa') }}"
+      password: "{{ env_var('SQLSERVER_PASSWORD', 'Testpass123!') }}"
+      database: "{{ env_var('SQLSERVER_DB', 'master') }}"
+      schema: dbt_constraints_test
+      threads: 4
+      driver: "ODBC Driver 18 for SQL Server"
+      encrypt: false
+      trust_server_certificate: true
+
     snowflake:
-      type: "snowflake"
-      client_session_keep_alive: False
+      type: snowflake
       account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
       user: "{{ env_var('SNOWFLAKE_USER') }}"
-      # The DBT_ENV_SECRET_ prefix prevents the variable being included in logs
-      private_key: "{{ env_var('DBT_ENV_SECRET_PRIVATE_KEY') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') }}"
       role: "{{ env_var('SNOWFLAKE_ROLE') }}"
       database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
-      schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'dbt_constraints_test') }}"
       threads: "{{ env_var('SNOWFLAKE_THREADS', '8') | as_number }}"
-      query_tag: dbt_constraints
-    oracle:
-      database: XEPDB1
-      host: localhost
-      pass: dbt_user2
-      port: 1521
-      protocol: tcp
-      schema: DBT_USER
-      service: XEPDB1
-      threads: 4
-      type: oracle
-      user: DBT_USER
-    postgres:
-      dbname: postgres
-      host: localhost
-      password: Snowflake
-      port: 5432
-      schema: dbt_demo
-      threads: 1
-      type: postgres
-      user: postgres
+      client_session_keep_alive: false
