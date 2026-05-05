@@ -6,7 +6,7 @@ macros:
     description: Primary macro automatically called `on-run-end` to generate primary keys, unique keys, and foreign keys. The `dbt_constraints_enabled` variable can be set to `false` in your project to disable this macro.
     arguments:
       - name: constraint_types
-        type: array of constraint types
+        type: list[string]
         description: Accepts a list of tests to consider for constraint creation and whether columns should be quoted. By default it will create all the constraint types. Valid values are ['primary_key', 'unique_key', 'unique_combination_of_columns', 'unique', 'foreign_key', 'relationships']
       - name: quote_columns
         type: boolean
@@ -20,10 +20,10 @@ macros:
     description: Calls the adapter-specific version of the macro to create a primary key
     arguments:
       - name: table_model
-        type: graph node
+        type: relation
         description: Accepts the graph node of the table that will have the constraint
       - name: column_names
-        type: array of column names
+        type: list[string]
         description: An array of text column names to include in the constraint
       - name: quote_columns
         type: boolean
@@ -38,10 +38,10 @@ macros:
     description: Calls the adapter-specific version of the macro to create a unique key
     arguments:
       - name: table_model
-        type: graph node
+        type: relation
         description: Accepts the graph node of the table that will have the constraint
       - name: column_names
-        type: array of column names
+        type: list[string]
         description: An array of text column names to include in the constraint
       - name: quote_columns
         type: boolean
@@ -55,20 +55,17 @@ macros:
   - name: create_foreign_key
     description: Calls the adapter-specific version of the macro to create a foreign key
     arguments:
-      - name: test_model
-        type: results node
-        description: Accepts the result node of the test related to this constraint
-      - name: pk_model
-        type: graph node
+      - name: pk_table_relation
+        type: relation
         description: Accepts the graph node of the parent table that has a PK or UK
-      - name: column_names
-        type: array of column names
+      - name: pk_column_names
+        type: list[string]
         description: An array of text column names to include in the FK reference
-      - name: fk_model
-        type: graph node
+      - name: fk_table_relation
+        type: relation
         description: Accepts the graph node of the table that will have the constraint
       - name: fk_column_names
-        type: array of column names
+        type: list[string]
         description: An array of text column names to include in the constraint
       - name: quote_columns
         type: boolean
@@ -86,7 +83,7 @@ macros:
         type: relation
         description: Accepts the relation of the table to check
       - name: column_names
-        type: array of column names
+        type: list[string]
         description: An array of text column names the constraint must contain
     docs:
       show: true
@@ -98,7 +95,7 @@ macros:
         type: relation
         description: Accepts the relation of the table to check
       - name: column_names
-        type: array of column names
+        type: list[string]
         description: An array of text column names the constraint must contain
     docs:
       show: true
