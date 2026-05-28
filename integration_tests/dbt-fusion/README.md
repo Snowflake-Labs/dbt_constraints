@@ -6,7 +6,8 @@ This directory contains integration tests for `dbt_constraints` with **dbt Fusio
 
 - **Test format**: Uses the new YAML format with `arguments:` wrapper (required by Fusion)
 - **Configuration**: `always_create_constraint` must be in `meta` block
-- **Compatibility**: Designed for dbt Fusion 2.0.0-preview.x
+- **Tested with**: dbt Fusion `2.0.0-preview.178`
+- **Minimum version for full FK support**: dbt Fusion `2.0.0-preview.176` (see Compatibility below)
 
 ## Usage
 
@@ -45,14 +46,18 @@ The key differences from the `dbt-core` project:
      require_generic_test_arguments_property: true
    ```
 
-## Known Issues
+## Compatibility
 
-⚠️ **Test Metadata Compatibility Issue**
+Full PK / UK / FK / NN parity with dbt-core requires **dbt Fusion >= `2.0.0-preview.176`**.
+That release shipped the upstream fix for [dbt-fusion#1575](https://github.com/dbt-labs/dbt-fusion/issues/1575)
+("test_metadata.kwargs missing custom arguments (values, to, field, etc.) in
+manifest for parameterised generic tests"), which is the metadata `dbt_constraints`
+needs to drive `relationships` / `foreign_key` constraints.
 
-dbt Fusion currently has a known issue with how it exposes test metadata to Jinja macros:
+| Fusion version | PK / UK / NN | FK |
+|---|---|---|
+| `>= 2.0.0-preview.176` (incl. `preview.178`) | Created | Created |
+| `<  2.0.0-preview.176` | Created | Skipped with an info-level log message ("Skipping foreign key on ... because pk_column_name/field is missing from test parameters") because the `to` / `field` arguments are not exposed by older Fusion to the package |
 
-- **Problem**: Test arguments are not included in `test_metadata.kwargs`
-- **Impact**: The `dbt_constraints` package cannot access parameters like `pk_column_name`, `pk_table_name`, etc.
-- **Status**: Tests will parse correctly but constraint creation may fail
-
-This issue is being tracked and will be resolved in future Fusion releases.
+The package always degrades gracefully on older Fusion versions; PK / UK / NN
+constraints are unaffected, only FK creation is skipped.

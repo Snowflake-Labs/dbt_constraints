@@ -477,9 +477,14 @@
                             {%- set fk_column_names = [test_parameters.fk_column_name] -%}
                         {%- endif -%}
 
-                        {#- Skip constraint if required parameters are missing (can happen in Fusion where test arguments aren't preserved) -#}
+                        {#- Skip constraint if required parameters are missing.
+                           This was the dominant failure mode on dbt Fusion < preview.176, where
+                           test_metadata.kwargs did not expose the parameterised generic test
+                           arguments (dbt-fusion#1575). Fusion >= preview.176 populates the
+                           arguments correctly; reaching this branch on a modern Fusion or
+                           dbt-core indicates a genuine misconfiguration in the test definition. -#}
                         {%- if pk_column_names | length == 0 -%}
-                            {%- do log("Skipping foreign key on " ~ fk_model.name ~ " because pk_column_name/field is missing from test parameters (Fusion limitation)", info=true) -%}
+                            {%- do log("Skipping foreign key on " ~ fk_model.name ~ " because pk_column_name/field is missing from test parameters", info=true) -%}
                         {%- elif fk_column_names | length == 0 -%}
                             {%- do log("Skipping foreign key on " ~ fk_model.name ~ " because fk_column_name/column_name is missing from test parameters", info=true) -%}
                         {%- elif not dbt_constraints.table_columns_all_exist(pk_table_relation, pk_column_names, lookup_cache) -%}
