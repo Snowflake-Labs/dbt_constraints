@@ -16,7 +16,7 @@
 
 {# Snowflake specific implementation to create a primary key #}
 {%- macro snowflake__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK") | upper | replace('"', '') -%}
+    {%- set constraint_name = dbt_constraints.sanitize_constraint_name((constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK")) -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
@@ -62,7 +62,7 @@
 
 {# Snowflake specific implementation to create a unique key #}
 {%- macro snowflake__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-    {%- set constraint_name = (constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK") | upper | replace('"', '') -%}
+    {%- set constraint_name = dbt_constraints.sanitize_constraint_name((constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_UK")) -%}
     {%- set columns_csv = dbt_constraints.get_quoted_column_csv(column_names, quote_columns) -%}
 
     {#- Check that the table does not already have this PK/UK -#}
@@ -108,7 +108,7 @@
 
 {# Snowflake specific implementation to create a foreign key #}
 {%- macro snowflake__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
-{%- set constraint_name = (constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK") | upper | replace('"', '') -%}
+{%- set constraint_name = dbt_constraints.sanitize_constraint_name((constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK")) -%}
 {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
 {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
 
@@ -350,7 +350,7 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
 {%- macro snowflake__have_references_priv(table_relation, verify_permissions, lookup_cache) -%}
 {%- if verify_permissions is sameas true -%}
 
-{%- set table_privileges = snowflake__lookup_table_privileges(table_relation, lookup_cache) -%}
+{%- set table_privileges = dbt_constraints.lookup_table_privileges(table_relation, lookup_cache) -%}
 {%- if "REFERENCES" in table_privileges or "OWNERSHIP" in table_privileges -%}
             {{ return(true) }}
         {%- else -%}
@@ -367,7 +367,7 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
 {%- macro snowflake__have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
 {%- if verify_permissions is sameas true -%}
 
-{%- set table_privileges = snowflake__lookup_table_privileges(table_relation, lookup_cache) -%}
+{%- set table_privileges = dbt_constraints.lookup_table_privileges(table_relation, lookup_cache) -%}
 {%- if "OWNERSHIP" in table_privileges -%}
             {{ return(true) }}
         {%- else -%}

@@ -375,7 +375,20 @@
                                 or ( dbt_constraints_sources_nn_enabled and test_name in("not_null") ) )
                         ) ) -%}
 
-                    {%- do node.update({'alias': node.alias or node.name }) -%}
+                    {#- Resolve the physical identifier, accounting for versioned models.
+                       For versioned models dbt materialises the table as `<name>_v<version>`,
+                       but `node.alias`/`node.name` may still be the unversioned form.
+                       Prefer `node.relation_name` (e.g. `"DB"."SCH"."MY_MODEL_V1"`) when set;
+                       otherwise append `_v<version>` if not already present. -#}
+                    {%- set _node_alias = node.alias or node.name -%}
+                    {%- if node.get('version') is not none -%}
+                        {%- if node.get('relation_name') -%}
+                            {%- set _node_alias = node.relation_name.split('.')[-1] | replace('"', '') -%}
+                        {%- elif not (_node_alias.endswith('_v' ~ node.version | string)) -%}
+                            {%- set _node_alias = _node_alias ~ '_v' ~ node.version -%}
+                        {%- endif -%}
+                    {%- endif -%}
+                    {%- do node.update({'alias': _node_alias}) -%}
                     {#- Append to our list of models for this test -#}
                     {%- do table_models.append(node) -%}
                     {%- if node.resource_type == "source"
@@ -495,10 +508,10 @@
                             {%- do dbt_constraints.create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                         {%- endif -%}
                     {%- else  -%}
-                        {%- if fk_model == None or not fk_table_relation.is_table -%}
+                        {%- if fk_table_relation is none or not fk_table_relation.is_table -%}
                             {%- do log("Skipping foreign key to " ~ pk_model.alias ~ " because the child table was not found in the database: " ~ fk_model.alias, info=true) -%}
                         {%- endif -%}
-                        {%- if pk_model == None or not pk_model.is_table -%}
+                        {%- if pk_table_relation is none or not pk_table_relation.is_table -%}
                             {%- do log("Skipping foreign key on " ~ fk_model.alias ~ " because the parent table was not found in the database: " ~ pk_model.alias, info=true) -%}
                         {%- endif -%}
                     {%- endif -%}
@@ -567,6 +580,21 @@
 {%- endmacro -%}
 
 
+{#- Dispatch wrapper for `lookup_table_privileges`. Adapters that support privilege
+    introspection (Snowflake, Vertica) override this; others fall through to a
+    no-op that returns an empty list. The wrapper namespaces the call to the
+    `dbt_constraints` package, which is required when users invoke
+    `dbt_constraints.create_constraints()` directly from their own on-run-end. -#}
+{%- macro lookup_table_privileges(table_relation, lookup_cache) -%}
+    {{ return(adapter.dispatch('lookup_table_privileges', 'dbt_constraints')(table_relation, lookup_cache)) }}
+{%- endmacro -%}
+
+
+{%- macro default__lookup_table_privileges(table_relation, lookup_cache) -%}
+    {{ return([]) }}
+{%- endmacro -%}
+
+
 {%- macro default__lookup_table_columns(table_relation, lookup_cache) -%}
     {%- if table_relation not in lookup_cache.table_columns -%}
         {%- set tab_Columns = adapter.get_columns_in_relation(table_relation) -%}
@@ -595,6 +623,18 @@
         {%- do grouped[key].append(row) -%}
     {%- endfor -%}
     {{ return(grouped) }}
+{%- endmacro -%}
+
+
+{#- Sanitise an auto-generated constraint name so it is a legal unquoted SQL
+    identifier across all supported adapters. Strips double quotes and replaces
+    every other non-[A-Z0-9_$] character with `_`. Required when source columns
+    contain parentheses, spaces, dashes, dots, or other punctuation that would
+    otherwise be carried through into the generated `<TABLE>_<COL>_PK` name and
+    rejected as invalid identifier syntax (issue #107). -#}
+{%- macro sanitize_constraint_name(name) -%}
+    {%- set _name = name | upper | replace('"', '') -%}
+    {{ return(modules.re.sub('[^A-Z0-9_$]', '_', _name)) }}
 {%- endmacro -%}
 
 
