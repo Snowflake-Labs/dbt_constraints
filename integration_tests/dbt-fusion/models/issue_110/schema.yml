@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  # Issue #110 regression — verify that an existing PK/UK has its RELY/NORELY
+  # flag flipped when the underlying test result changes between runs.
+  # See: https://github.com/Snowflake-Labs/dbt_constraints/issues/110
+  - name: dim_issue_110_rely_flip
+    description: "Toggle target for the issue #110 rely-flip regression test"
+    columns:
+      - name: o_orderkey
+        description: "Unique when issue_110_inject_dup=false, duplicated when true"
+    tests:
+      # severity=warn so a failed unique_key on the second run does not stop
+      # the build — we want the package to flip the constraint to NORELY.
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
