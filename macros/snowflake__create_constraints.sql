@@ -41,7 +41,18 @@
         {%- endif -%}
 
     {%- else -%}
-        {%- do log("Skipping " ~ constraint_name ~ " because PK/UK already exists: " ~ table_relation ~ " " ~ column_names, info=false) -%}
+        {#- A PK/UK already exists for these columns (possibly under a different name).
+           Flip RELY/NORELY on the existing constraint to match the latest test result. -#}
+        {%- set rely_clause = 'NORELY' if rely_clause == '' else rely_clause -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
+            {%- do dbt_constraints.set_rely_norely(table_relation, existing_constraint, lookup_cache.unique_keys[table_relation][existing_constraint].rely, rely_clause) -%}
+            {#- Keep the lookup cache in sync with the new rely value -#}
+            {%- do lookup_cache.unique_keys[table_relation].update( {existing_constraint:
+                {   "columns": column_names,
+                    "rely": "true" if rely_clause == "RELY" else "false" } } ) -%}
+        {%- else -%}
+            {%- do log("Skipping rely update on " ~ existing_constraint ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+        {%- endif -%}
     {%- endif -%}
 
 {%- endmacro -%}
@@ -77,7 +88,18 @@
         {%- endif -%}
 
     {%- else -%}
-        {%- do log("Skipping " ~ constraint_name ~ " because PK/UK already exists: " ~ table_relation ~ " " ~ column_names, info=false) -%}
+        {#- A PK/UK already exists for these columns (possibly under a different name).
+           Flip RELY/NORELY on the existing constraint to match the latest test result. -#}
+        {%- set rely_clause = 'NORELY' if rely_clause == '' else rely_clause -%}
+        {%- if dbt_constraints.have_ownership_priv(table_relation, verify_permissions, lookup_cache) -%}
+            {%- do dbt_constraints.set_rely_norely(table_relation, existing_constraint, lookup_cache.unique_keys[table_relation][existing_constraint].rely, rely_clause) -%}
+            {#- Keep the lookup cache in sync with the new rely value -#}
+            {%- do lookup_cache.unique_keys[table_relation].update( {existing_constraint:
+                {   "columns": column_names,
+                    "rely": "true" if rely_clause == "RELY" else "false" } } ) -%}
+        {%- else -%}
+            {%- do log("Skipping rely update on " ~ existing_constraint ~ " because of insufficient privileges: " ~ table_relation, info=true) -%}
+        {%- endif -%}
     {%- endif -%}
 
 {%- endmacro -%}
@@ -115,7 +137,18 @@
             {%- endif -%}
 
         {%- else -%}
-            {%- do log("Skipping " ~ constraint_name ~ " because FK already exists: " ~ fk_table_relation ~ " " ~ fk_column_names, info=false) -%}
+            {#- An FK already exists for these columns (possibly under a different name).
+               Flip RELY/NORELY on the existing constraint to match the latest test result. -#}
+            {%- set rely_clause = 'NORELY' if rely_clause == '' else rely_clause -%}
+            {%- if dbt_constraints.have_ownership_priv(fk_table_relation, verify_permissions, lookup_cache) -%}
+                {%- do dbt_constraints.set_rely_norely(fk_table_relation, existing_constraint, lookup_cache.foreign_keys[fk_table_relation][existing_constraint].rely, rely_clause) -%}
+                {#- Keep the lookup cache in sync with the new rely value -#}
+                {%- do lookup_cache.foreign_keys[fk_table_relation].update( {existing_constraint:
+                    {   "columns": fk_column_names,
+                        "rely": "true" if rely_clause == "RELY" else "false" } } ) -%}
+            {%- else -%}
+                {%- do log("Skipping rely update on " ~ existing_constraint ~ " because of insufficient privileges: " ~ fk_table_relation, info=true) -%}
+            {%- endif -%}
         {%- endif -%}
     {%- else -%}
         {%- do log("Skipping " ~ constraint_name ~ " because a PK/UK was not found on the PK table: " ~ pk_table_relation ~ " " ~ pk_column_names, info=true) -%}
@@ -270,7 +303,7 @@ SHOW PRIMARY KEYS IN TABLE {{ table_relation }}
     {%- for constraint_name, cached_val in lookup_cache.foreign_keys[table_relation].items() -%}
         {%- if dbt_constraints.column_list_matches(cached_val.columns, column_names ) -%}
             {%- do log("Found FK key: " ~ table_relation ~ " " ~ constraint_name ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
-            {{ return(cached_val.constraint_name) }}
+            {{ return(constraint_name) }}
         {%- endif -%}
     {% endfor %}
     {{ return(none) }}
@@ -303,7 +336,7 @@ SHOW IMPORTED KEYS IN TABLE {{ table_relation }}
 {%- for constraint_name, cached_val in lookup_cache.foreign_keys[table_relation].items() -%}
     {%- if dbt_constraints.column_list_matches(cached_val.columns, column_names ) -%}
         {%- do log("Found FK key: " ~ table_relation ~ " " ~ constraint_name ~ " " ~ cached_val.columns ~ " " ~ cached_val.rely, info=false) -%}
-        {{ return(cached_val.constraint_name) }}
+        {{ return(constraint_name) }}
     {%- endif -%}
 {% endfor %}
 
