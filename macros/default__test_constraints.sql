@@ -15,7 +15,7 @@ NOTE: This test is designed to implement the "primary key" as specified in ANSI 
 select validation_errors.* from (
     select
         {{prefixed_columns_list | join(', ')}}, count(*) as n_records
-    from {{model}} pk_test
+    from (select * from {{model}}) as pk_test
     group by {{prefixed_columns_list | join(', ')}}
     having count(*) > 1
         {% for column in prefixed_columns_list -%}
@@ -40,7 +40,7 @@ NOTE: This test is designed to implement the "unique constraint" as specified in
 select validation_errors.* from (
     select
         {{prefixed_columns_list | join(', ')}}, count(*) as n_records
-    from {{model}} uk_test
+    from (select * from {{model}}) as uk_test
     group by {{prefixed_columns_list | join(', ')}}
     having count(*) > 1
 ) validation_errors
@@ -81,7 +81,7 @@ select validation_errors.* from (
     from (
         select
             {{ fk_columns_inner_list | join(', ') }}
-        from {{model}} fk_child_inner
+        from (select * from {{model}}) as fk_child_inner
         where 1=1
             {% for column in fk_columns_inner_list -%}
             and {{column}} is not null
