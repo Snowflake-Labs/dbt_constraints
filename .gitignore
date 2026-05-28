@@ -56,3 +56,8 @@ dmypy.json
 **/.taskmaster/**
 **/.cursor/**
 **/.dockerenv/**
+**/__pycache__/**
+
+# Local IDE / editor artifacts
+.snowflake/
+*.code-workspace
