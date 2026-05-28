@@ -606,22 +606,15 @@ def dbt_seed(run_dbt, database):
     """
     Fixture that runs dbt seed before tests that need seeded data.
     Runs deps and seed commands to set up test data.
-
-    Note: Fusion tests are expected to fail due to test metadata compatibility issues.
     """
     # Run deps first to ensure packages are installed
     run_dbt("dbt deps")
 
-    # For Fusion, we expect seed to fail due to constraint creation issues
-    # This is a known compatibility issue with test_metadata.kwargs
-    if database == "fusion":
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            run_dbt("dbt seed --full-refresh", check=False)
-    else:
-        # Run seed to load test data
-        run_dbt("dbt seed --full-refresh")
+    # Run seed to load test data. Fusion >= 2.0.0-preview.176 supports the
+    # generic-test arguments needed for FK creation (dbt-fusion#1575); older
+    # Fusion would silently skip FK constraints but still complete the seed,
+    # so we no longer need a Fusion-specific suppress block here.
+    run_dbt("dbt seed --full-refresh")
     yield
     # No cleanup needed - seeds persist for the test run
 
