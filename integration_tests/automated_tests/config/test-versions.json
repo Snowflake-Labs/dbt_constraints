@@ -10,15 +10,15 @@
   "adapters": {
     "postgres": {
       "package": "dbt-postgres",
-      "image": "postgres:17-alpine"
+      "image": "postgres:17-bookworm"
     },
     "oracle": {
       "package": "dbt-oracle",
-      "image": "gvenzl/oracle-free:23-slim-faststart"
+      "image": "gvenzl/oracle-free:23.26.1-slim-faststart"
     },
     "sqlserver": {
       "package": "dbt-sqlserver",
-      "image": "mcr.microsoft.com/mssql/server:2022-latest"
+      "image": "mcr.microsoft.com/mssql/server:2025-latest"
     },
     "snowflake": {
       "package": "dbt-snowflake",

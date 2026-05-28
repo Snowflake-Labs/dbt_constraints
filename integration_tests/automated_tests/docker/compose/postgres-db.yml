@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-bookworm
     container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
