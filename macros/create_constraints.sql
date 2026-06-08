@@ -175,7 +175,8 @@
 
 
 {#- This macro checks if a test or its model is selected -#}
-{%- macro test_selected(test_model) -%}
+{#- Added optional argument fk_dependency_dict to avoid full loop in every call -#}
+{%- macro test_selected(test_model, fk_dependency_dict=[]) -%}
 
     {%- if test_model.unique_id in selected_resources -%}
         {{ return("TEST_SELECTED") }}
@@ -185,7 +186,8 @@
     {%- endif -%}
 
     {#- Check if a PK/UK should be created because it is referenced by a selected FK -#}
-    {%- if test_model.test_metadata.name in ("primary_key", "unique_key", "unique_combination_of_columns", "unique") -%}
+    {%- if test_model.test_metadata.name in ("primary_key", "unique_key", "unique_combination_of_columns", "unique")
+            and fk_dependency_dict | length > 0 -%}
         {#- Handle both dbt-core kwargs and Fusion arguments format -#}
         {%- set raw_pk_kwargs = test_model.test_metadata.kwargs -%}
         {%- if raw_pk_kwargs.arguments is defined -%}
@@ -207,37 +209,37 @@
         {%- elif pk_test_args.column_name -%}
             {%- set pk_test_columns =  [pk_test_args.column_name] -%}
         {%- endif -%}
-        {%- for fk_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
-                if  fk_model.test_metadata
-                and fk_model.test_metadata.name in ("foreign_key", "relationships")
-                and test_model.attached_node in fk_model.depends_on.nodes
-                and ( (fk_model.unique_id and fk_model.unique_id in selected_resources)
-                    or (fk_model.attached_node and fk_model.attached_node in selected_resources) ) -%}
-            {#- Handle both dbt-core kwargs and Fusion arguments format -#}
-            {%- set raw_fk_kwargs = fk_model.test_metadata.kwargs -%}
-            {%- if raw_fk_kwargs.arguments is defined -%}
-                {%- set fk_test_args = {} -%}
-                {%- for key, value in raw_fk_kwargs.items() -%}
-                    {%- if key != 'arguments' -%}
-                        {%- do fk_test_args.update({key: value}) -%}
-                    {%- endif -%}
-                {%- endfor -%}
-                {%- do fk_test_args.update(raw_fk_kwargs.arguments) -%}
-            {%- else -%}
-                {%- set fk_test_args = raw_fk_kwargs -%}
-            {%- endif -%}
-            {%- set fk_test_columns = [] -%}
-            {%- if fk_test_args.pk_column_names -%}
-                {%- set fk_test_columns =  fk_test_args.pk_column_names -%}
-            {%- elif fk_test_args.pk_column_name -%}
-                {%- set fk_test_columns =  [fk_test_args.pk_column_name] -%}
-            {%- elif fk_test_args.field -%}
-                {%- set fk_test_columns =  [fk_test_args.field] -%}
-            {%- endif -%}
-            {%- if column_list_matches(pk_test_columns, fk_test_columns) -%}
-                {{ return("PK_UK_FOR_SELECTED_FK") }}
-            {%- endif -%}
-        {%- endfor -%}
+        {%- if test_model.attached_node in fk_dependency_dict -%}
+            {%- for fk_model in fk_dependency_dict[test_model.attached_node]
+                    if (fk_model.unique_id and fk_model.unique_id in selected_resources)
+                    or (fk_model.attached_node and fk_model.attached_node in selected_resources) -%}
+                {#- Handle both dbt-core kwargs and Fusion arguments format -#}
+                {%- set raw_fk_kwargs = fk_model.test_metadata.kwargs -%}
+                {%- if raw_fk_kwargs.arguments is defined -%}
+                    {%- set fk_test_args = {} -%}
+                    {%- for key, value in raw_fk_kwargs.items() -%}
+                        {%- if key != 'arguments' -%}
+                            {%- do fk_test_args.update({key: value}) -%}
+                        {%- endif -%}
+                    {%- endfor -%}
+                    {%- do fk_test_args.update(raw_fk_kwargs.arguments) -%}
+                {%- else -%}
+                    {%- set fk_test_args = raw_fk_kwargs -%}
+                {%- endif -%}
+                {%- set fk_test_columns = [] -%}
+                {%- if fk_test_args.pk_column_names -%}
+                    {%- set fk_test_columns =  fk_test_args.pk_column_names -%}
+                {%- elif fk_test_args.pk_column_name -%}
+                    {%- set fk_test_columns =  [fk_test_args.pk_column_name] -%}
+                {%- elif fk_test_args.field -%}
+                    {%- set fk_test_columns =  [fk_test_args.field] -%}
+                {%- endif -%}
+                {%- if column_list_matches(pk_test_columns, fk_test_columns) -%}
+                    {{ return("PK_UK_FOR_SELECTED_FK") }}
+                {%- endif -%}
+
+            {%- endfor -%}
+        {%- endif -%}
     {%- endif -%}
 
     {{ return(none) }}
@@ -300,6 +302,24 @@
     {%- set dbt_constraints_sources_nn_enabled = var('dbt_constraints_sources_nn_enabled', "false")|string|lower == "true" %}
     {%- set dbt_constraints_always_norely = var('dbt_constraints_always_norely', "false")|string|lower == "true" %}
 
+    {%- set pk_uk_test_list = [] -%}
+
+    {# prepare dictionary of foreign key/relationship tests for use in test_selected, to avoid the full loop in the original code #}
+    {%- set fk_dependency_dict = {} -%}
+    {% if "primary_key" in constraint_types or "unique_key" in constraint_types or "unique_combination_of_columns" in constraint_types or "unique" in constraint_types %}
+        {%- for fk_test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
+                if  fk_test_model.test_metadata
+                and fk_test_model.test_metadata.name in ("foreign_key", "relationships") -%}
+            {%- for fk_node in fk_test_model.depends_on.nodes -%}
+                {%- if fk_node not in fk_dependency_dict -%}
+                    {%- do fk_dependency_dict.update({fk_node: []}) -%}
+                {%- endif -%}
+                {%- do fk_dependency_dict[fk_node].append(fk_test_model) -%}
+            {%- endfor -%}
+        {%- endfor -%}
+    {%- endif -%}
+    
+
     {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests -#}
     {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
             if test_model.test_metadata
@@ -330,7 +350,8 @@
             {%- set test_parameters = raw_kwargs -%}
         {%- endif -%}
         {%- set test_name = test_model.test_metadata.name -%}
-        {%- set selected = dbt_constraints.test_selected(test_model) -%}
+        {# dictionary with foreign key/relationship tests is passed to test_selected as optional argument #}
+        {%- set selected = dbt_constraints.test_selected(test_model, fk_dependency_dict) -%}
 
         {#- We can shortcut additional tests if the constraint was not selected -#}
         {%- if selected is not none and dbt_constraints_always_norely -%}
