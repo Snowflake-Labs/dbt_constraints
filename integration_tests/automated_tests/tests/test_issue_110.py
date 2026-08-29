@@ -12,107 +12,138 @@ already-existing constraints in the three Snowflake create macros. 1.0.9
 restores that path and additionally handles the case where the existing
 constraint has a different name than the one dbt would have generated.
 
-The toggleable model `dim_issue_110_rely_flip` lives in the dbt project; the
-data flips between unique and duplicated based on the
-`issue_110_inject_dup` var.
+## How this is tested in a single build
+
+The path only applies to a constraint that ALREADY exists, so a first build cannot reach
+it: the package finds nothing and takes the CREATE branch.
+
+Rather than rebuild one table across several runs to reach each state, the project stages
+three models whose post-hooks pre-create the constraint with the WRONG flag. A post-hook
+runs before the package's on-run-end hook, so the package faces an existing constraint it
+must correct. One build therefore covers both directions and the alternate-name case.
+
+    dim_issue_110_prestaged_rely      unique data,     pre-created NORELY -> must go RELY
+    dim_issue_110_prestaged_norely    duplicated data, pre-created RELY   -> must go NORELY
+    dim_issue_110_prestaged_altname   unique data,     NORELY under a hand-picked name
+
+See macros/stage_existing_constraint.sql in each test project.
+
+`dim_issue_110_rely_flip` remains for the realistic two-run sequence, where the data
+itself changes between builds. That is how a user meets this bug, and it reads the one
+transition build.
+
+## Careful: "NORELY" contains "RELY"
+
+An earlier version of this file asserted `"RELY" in output`, which is true for NORELY too.
+That assertion could never tell the two apart, and the test that claimed to check the
+flip back to RELY never checked anything. Always assert the whole log line, including the
+constraint name, as `_updated_to` does below.
 """
 
 # type: ignore
 import pytest
 
+# The log line the package emits from set_rely_norely.
+UPDATE_PREFIX = "updating constraint:"
 
-@pytest.mark.issue_110
-class TestIssue110RelyFlip:
-    """RELY/NORELY must flip on existing constraints when test results change."""
 
-    @staticmethod
-    def _is_snowflake(target: str) -> bool:
-        # RELY/NORELY is a Snowflake-only feature. Only the snowflake and fusion
-        # targets exercise the patched macros.
-        return target in ("snowflake", "fusion")
+def _is_snowflake(target: str) -> bool:
+    # RELY/NORELY is a Snowflake-only feature. Only the snowflake and fusion
+    # targets exercise the patched macros. The in-database cells report "snowflake".
+    return target in ("snowflake", "fusion")
 
-    def test_first_run_creates_rely(self, dbt_runner, target):
-        """First run with unique data should create the UK with RELY."""
-        if not self._is_snowflake(target):
-            pytest.skip(f"RELY/NORELY is Snowflake-only (target={target})")
 
-        # Make sure dependencies exist.
-        dbt_runner(["build", "--select", "+dim_issue_110_rely_flip"])
+def _skip_unless_snowflake(target: str) -> None:
+    if not _is_snowflake(target):
+        pytest.skip(f"RELY/NORELY is Snowflake-only (target={target})")
 
-        # Direct rebuild with the default var — unique data, test passes.
-        result = dbt_runner(["run", "--select", "dim_issue_110_rely_flip"])
-        assert result.returncode == 0
-        # Either creates anew or flips to RELY — both are acceptable.
-        combined = result.stdout + result.stderr
-        assert (
-            "Creating unique key" in combined
-            or "Updating constraint" in combined
-            or "Found UK key" in combined
-        ), f"Unexpected first-run output:\n{combined}"
 
-    def test_second_run_flips_to_norely(self, dbt_runner, target):
-        """Re-run with duplicates injected — UK must flip from RELY to NORELY."""
-        if not self._is_snowflake(target):
-            pytest.skip(f"RELY/NORELY is Snowflake-only (target={target})")
+def assert_updated_to(build_log: str, constraint_name: str, rely: str) -> None:
+    """
+    Fail unless the log shows this constraint being updated to exactly this flag.
 
-        # Run 1: clean data, constraint should be RELY.
-        first = dbt_runner(["build", "--select", "+dim_issue_110_rely_flip"])
-        assert first.returncode == 0
-
-        # Run 2: inject duplicates so unique_key test fails (severity=warn).
-        # The package must ALTER ... MODIFY CONSTRAINT ... NORELY.
-        second = dbt_runner(
-            [
-                "build",
-                "--select",
-                "dim_issue_110_rely_flip",
-                "--vars",
-                "'{issue_110_inject_dup: true}'",
-            ]
-        )
-        # severity=warn -> build returns non-zero only on warnings policy;
-        # we accept either as long as the rely flip was attempted.
-        combined = second.stdout + second.stderr
-        assert "Updating constraint" in combined and "NORELY" in combined, (
-            "Expected 'Updating constraint ... NORELY' log on second run; "
-            "this is the regression path from issue #110.\nOutput:\n" + combined
-        )
-
-    def test_third_run_flips_back_to_rely(self, dbt_runner, target):
-        """After data is fixed, UK must flip back from NORELY to RELY."""
-        if not self._is_snowflake(target):
-            pytest.skip(f"RELY/NORELY is Snowflake-only (target={target})")
-
-        # Set up: leave the constraint in NORELY state.
-        dbt_runner(["build", "--select", "+dim_issue_110_rely_flip"])
-        dbt_runner(
-            [
-                "build",
-                "--select",
-                "dim_issue_110_rely_flip",
-                "--vars",
-                "'{issue_110_inject_dup: true}'",
-            ]
-        )
-
-        # Re-run with default var — data is unique again, constraint should
-        # flip back to RELY.
-        result = dbt_runner(["build", "--select", "dim_issue_110_rely_flip"])
-        combined = result.stdout + result.stderr
-        assert "Updating constraint" in combined and "RELY" in combined, (
-            "Expected 'Updating constraint ... RELY' log when data becomes "
-            "unique again.\nOutput:\n" + combined
-        )
+    Matches the whole line, `updating constraint: <name> <flag>`. Matching the flag alone
+    cannot work, because NORELY ends with RELY.
+    """
+    expected = f"{UPDATE_PREFIX} {constraint_name.lower()} {rely.lower()}"
+    assert expected in build_log, (
+        f"Expected the package to log {expected!r}.\n"
+        "Its absence means the package did not correct the rely flag on a constraint "
+        "that already existed, which is the issue #110 regression. The post-hook "
+        "pre-created that constraint with the wrong flag on purpose.\n"
+        "Lines the build did log:\n"
+        + "\n".join(line for line in build_log.splitlines() if UPDATE_PREFIX in line)
+    )
 
 
 @pytest.mark.issue_110
-def test_issue_110_macro_does_not_regress(dbt_runner, target):
+def test_existing_constraint_corrected_to_rely(baseline_build, target):
+    """A pre-created NORELY constraint on unique data must be corrected to RELY."""
+    _skip_unless_snowflake(target)
+    assert_updated_to(
+        baseline_build, "dim_issue_110_prestaged_rely_o_orderkey_uk", "RELY"
+    )
+
+
+@pytest.mark.issue_110
+def test_existing_constraint_corrected_to_norely(baseline_build, target):
+    """A pre-created RELY constraint on duplicated data must be corrected to NORELY."""
+    _skip_unless_snowflake(target)
+    assert_updated_to(
+        baseline_build, "dim_issue_110_prestaged_norely_o_orderkey_uk", "NORELY"
+    )
+
+
+@pytest.mark.issue_110
+def test_existing_constraint_found_by_column_not_name(baseline_build, target):
+    """
+    The package must correct a constraint whose name it did not generate.
+
+    `unique_constraint_exists` matches on columns, so the package must update
+    ISSUE_110_HAND_NAMED_UK in place rather than add a second constraint under its own
+    generated name. This is the second half of the 1.0.9 fix.
+    """
+    _skip_unless_snowflake(target)
+    assert_updated_to(baseline_build, "issue_110_hand_named_uk", "RELY")
+
+    # It must not also create its own constraint on the same column.
+    assert (
+        "creating unique key: dim_issue_110_prestaged_altname_o_orderkey_uk"
+        not in baseline_build
+    ), (
+        "The package created a second unique key on a column that already had one. "
+        "It did not recognise the hand-named constraint."
+    )
+
+
+@pytest.mark.issue_110
+def test_rely_flips_when_data_degrades(transition_build, target):
+    """
+    The realistic sequence: a constraint created RELY must flip to NORELY when the data
+    goes bad on a later run.
+
+    The pre-staged tests above isolate the same code path inside one build. This one
+    covers how a user actually meets the bug, over two builds with changed data.
+    `transition_build` supplies that second build and is shared with other tests.
+    """
+    _skip_unless_snowflake(target)
+    assert_updated_to(
+        transition_build, "dim_issue_110_rely_flip_o_orderkey_uk", "NORELY"
+    )
+
+
+@pytest.mark.issue_110
+def test_issue_110_macro_does_not_regress(run_dbt, target):
     """
     Smoke test: parse the project to make sure the macro changes do not
     introduce a Jinja syntax error. This runs on every target (not just
     Snowflake) because parse is dialect-agnostic.
+
+    This keeps its own command rather than reading baseline_build. A successful build
+    implies a successful parse, but this test must still report on a target whose build
+    cannot complete, which is exactly when a macro syntax error is easiest to miss.
     """
-    result = dbt_runner(["parse"])
+    result = run_dbt("dbt parse", check=False)
     assert result.returncode == 0, (
         f"dbt parse failed after the issue #110 macro changes:\n"
         f"{result.stdout}\n{result.stderr}"

@@ -16,3 +16,41 @@ models:
           column_name: o_orderkey
           config:
             severity: warn
+
+
+  # The three models below let ONE build exercise the issue #110 path that only applies
+  # to a constraint that ALREADY exists. Each one's post-hook pre-creates the constraint
+  # with the WRONG rely flag, so the package must correct it during on-run-end.
+  # See macros/stage_existing_constraint.sql.
+  - name: dim_issue_110_prestaged_rely
+    description: "Unique data, pre-created NORELY. The package must correct it to RELY."
+    columns:
+      - name: o_orderkey
+        description: "Unique, so the test passes and the flag must become RELY"
+    tests:
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
+
+  - name: dim_issue_110_prestaged_norely
+    description: "Duplicated data, pre-created RELY. The package must correct it to NORELY."
+    columns:
+      - name: o_orderkey
+        description: "Duplicated, so the test fails and the flag must become NORELY"
+    tests:
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
+
+  - name: dim_issue_110_prestaged_altname
+    description: "Pre-created NORELY under a hand-picked name. The package must find it by column."
+    columns:
+      - name: o_orderkey
+        description: "Unique, so the flag must become RELY on the existing named constraint"
+    tests:
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            severity: warn

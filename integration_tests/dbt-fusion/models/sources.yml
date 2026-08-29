@@ -1,7 +1,8 @@
 version: 2
 
-# We are creating sources that match our seed tables to test source
-# tests do not result in constraints
+# These sources match the seed tables. The clone_table('source_') seed post-hook
+# creates them. They show that the package creates constraints on sources when
+# dbt_constraints_sources_enabled is true. See assert_source_constraints.
 sources:
   - name: tpc_h
     schema: "{{ target.schema }}"
@@ -11,7 +12,9 @@ sources:
           - name: p_partkey
             description: "The primary key for this table"
             tests:
-              - unique
+              # This is the only source PRIMARY KEY in the project. The other
+              # source tables use `unique`. That test creates a UNIQUE key.
+              - dbt_constraints.primary_key
               - not_null
               - relationships:
                   arguments:

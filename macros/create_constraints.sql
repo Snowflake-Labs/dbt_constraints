@@ -283,7 +283,7 @@
 
 
 {#- This macro checks if a test or its model is selected -#}
-{#- Added optional argument fk_dependency_dict to avoid full loop in every call -#}
+{#- The fk_dependency_dict argument is optional. It prevents a full loop in each call. -#}
 {%- macro test_selected(test_model, fk_dependency_dict=[]) -%}
 
     {%- if test_model.unique_id in selected_resources -%}
@@ -388,11 +388,14 @@
         {{ return(true) }}
     {%- endif -%}
     {%- for table_node in test_model.depends_on.nodes -%}
-        {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-            if node.config.get("always_create_constraint", "false")|string|lower == "true"
-            or node.config.get("meta", {}).get("always_create_constraint", "false")|string|lower == "true" -%}
+        {#- graph.nodes uses unique_id as the key. Read the node directly.
+           graph.sources holds the sources. Read graph.sources if the node is absent. -#}
+        {%- set node = graph.nodes.get(table_node) or graph.sources.get(table_node) -%}
+        {%- if node and node.config
+            and ( node.config.get("always_create_constraint", "false")|string|lower == "true"
+            or node.config.get("meta", {}).get("always_create_constraint", "false")|string|lower == "true" ) -%}
             {{ return(true) }}
-        {%- endfor -%}
+        {%- endif -%}
     {%- endfor -%}
 
     {{ return(false) }}
@@ -412,7 +415,8 @@
 
     {%- set pk_uk_test_list = [] -%}
 
-    {# prepare dictionary of foreign key/relationship tests for use in test_selected, to avoid the full loop in the original code #}
+    {# Build a dictionary of foreign key and relationship tests for test_selected.
+       This prevents a full loop in each call. #}
     {%- set fk_dependency_dict = {} -%}
     {% if "primary_key" in constraint_types or "unique_key" in constraint_types or "unique_combination_of_columns" in constraint_types or "unique" in constraint_types %}
         {%- for fk_test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
@@ -428,16 +432,22 @@
     {%- endif -%}
 
 
-    {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests -#}
+    {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests.
+       A test declared on a source has no attached_node. Accept such a test when it
+       depends on exactly one node. That node is the source. A generic test on a
+       model always sets attached_node. The test_metadata checks exclude singular
+       tests. This check follows the depends_on checks, because the filter on
+       `nodes` needs `nodes` to exist. -#}
     {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
             if test_model.test_metadata
             and test_model.test_metadata.kwargs
             and test_model.test_metadata.name
             and test_model.test_metadata.name is in( constraint_types )
             and test_model.unique_id
-            and test_model.attached_node
             and test_model.depends_on
             and test_model.depends_on.nodes
+            and ( test_model.attached_node
+                or (test_model.depends_on.nodes | length) == 1 )
             and test_model.config
             and test_model.config.enabled
             and ( test_model.config.get("dbt_constraints_enabled", "true")|string|lower == "true"
@@ -458,7 +468,7 @@
             {%- set test_parameters = raw_kwargs -%}
         {%- endif -%}
         {%- set test_name = test_model.test_metadata.name -%}
-        {# dictionary with foreign key/relationship tests is passed to test_selected as optional argument #}
+        {# Pass the dictionary of foreign key and relationship tests to test_selected. #}
         {%- set selected = dbt_constraints.test_selected(test_model, fk_dependency_dict) -%}
 
         {#- We can shortcut additional tests if the constraint was not selected -#}
@@ -492,8 +502,11 @@
 
             {#- Find the table models that are referenced by this test. -#}
             {%- for table_node in test_model.depends_on.nodes -%}
-                {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-                    if node.config
+                {#- graph.nodes uses unique_id as the key. Read the node directly.
+                   graph.sources holds the sources. Read graph.sources if the node
+                   is absent. -#}
+                {%- set node = graph.nodes.get(table_node) or graph.sources.get(table_node) -%}
+                {%- if node and node.config
                     and ( node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
                         or node.config.get("meta", {}).get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
                     and ( node.resource_type in ("model", "snapshot", "seed")
@@ -508,8 +521,10 @@
                        For versioned models dbt materialises the table as `<name>_v<version>`,
                        but `node.alias`/`node.name` may still be the unversioned form.
                        Prefer `node.relation_name` (e.g. `"DB"."SCH"."MY_MODEL_V1"`) when set;
-                       otherwise append `_v<version>` if not already present. -#}
-                    {%- set _node_alias = node.alias or node.name -%}
+                       otherwise append `_v<version>` if not already present.
+                       A source has no `alias`. A source holds the physical table
+                       name in `identifier`. Read `identifier` before `name`. -#}
+                    {%- set _node_alias = node.alias or node.identifier or node.name -%}
                     {%- if node.get('version') is not none -%}
                         {%- if node.get('relation_name') -%}
                             {%- set _node_alias = node.relation_name.split('.')[-1] | replace('"', '') -%}
@@ -527,7 +542,7 @@
                         {%- set ns.verify_permissions = true -%}
                     {%- endif -%}
 
-                {% endfor %}
+                {% endif %}
             {% endfor %}
 
             {#- We only create PK/UK if there is one model referenced by the test

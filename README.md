@@ -24,6 +24,15 @@ When you add this package, dbt will automatically begin to create __unique keys_
 
 The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation. By default dbt Constraints only creates constraints on models. To allow constraints on sources, you can set `dbt_constraints_sources_enabled` to `true`. The package will verify that you have sufficient database privileges to create constraints on sources.
 
+> **Behaviour change: constraints on sources now work.**
+> The source variables below had no effect in earlier releases. The package looked
+> up test dependencies in `graph.nodes`, but dbt holds sources in `graph.sources`,
+> so every source dependency resolved to nothing and no constraint was created.
+> If you already set `dbt_constraints_sources_enabled: true`, the package will now
+> start issuing DDL against your source tables on the next run. Confirm that the
+> dbt role should be altering those tables before you upgrade. Set
+> `dbt_constraints_sources_enabled: false` to keep the previous behaviour.
+
 ```yml
 vars:
   # The package can be temporarily disabled using this variable
