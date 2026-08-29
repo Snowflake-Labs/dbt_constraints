@@ -9,7 +9,7 @@ dbt_constraints:
       password: "{{ env_var('POSTGRES_PASSWORD', 'testpass123') }}"
       dbname: "{{ env_var('POSTGRES_DB', 'dbt_test') }}"
       schema: dbt_constraints_test
-      threads: 4
+      threads: 64
 
     oracle:
       type: oracle
@@ -20,7 +20,7 @@ dbt_constraints:
       service: "{{ env_var('ORACLE_SERVICE', 'FREEPDB1') }}"
       database: "{{ env_var('ORACLE_SERVICE', 'FREEPDB1') }}"
       schema: "{{ env_var('ORACLE_USER', 'dbt_test') | upper }}"
-      threads: 4
+      threads: 64
       protocol: tcp
 
     sqlserver:
@@ -31,7 +31,7 @@ dbt_constraints:
       password: "{{ env_var('SQLSERVER_PASSWORD', 'Testpass123!') }}"
       database: "{{ env_var('SQLSERVER_DB', 'master') }}"
       schema: dbt_constraints_test
-      threads: 4
+      threads: 64
       driver: "ODBC Driver 18 for SQL Server"
       encrypt: false
       trust_server_certificate: true
@@ -46,5 +46,5 @@ dbt_constraints:
       database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
       schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'dbt_constraints_test') }}"
-      threads: "{{ env_var('SNOWFLAKE_THREADS', '8') | as_number }}"
+      threads: "{{ env_var('SNOWFLAKE_THREADS', '64') | as_number }}"
       client_session_keep_alive: false
