@@ -17,6 +17,12 @@ clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
 
+# Databases that enforce constraints deadlock when threads run DDL on tables that
+# a foreign key joins. This hook releases the constraints on the relations that the
+# run drops or replaces. It runs one time, before the worker threads start.
+on-run-start:
+  - "{{ dbt_constraints.release_constraints_for_rebuild() }}"
+
 # This package adds an automatic hook to create constraints
 on-run-end:
   - "{{ dbt_constraints.create_constraints() }}"
@@ -25,6 +31,12 @@ on-run-end:
 vars:
   # The package can be temporarily disabled using this variable
   dbt_constraints_enabled: true
+
+  # On a database that enforces constraints, the package releases the constraints
+  # on the relations that the run drops or replaces. This happens before the build
+  # starts. It prevents deadlocks between threads that run DDL on tables that a
+  # foreign key joins. Set this variable to false to drop them during the build.
+  dbt_constraints_release_before_build: true
 
   # You can control which types of constraints are enabled globally
   dbt_constraints_pk_enabled: true

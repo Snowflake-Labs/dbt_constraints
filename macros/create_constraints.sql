@@ -106,6 +106,114 @@
 
 
 
+{#- Return the relations that this run drops or replaces.
+
+   Databases that enforce constraints deadlock when threads run DDL on tables that
+   a foreign key joins. A CASCADE drop of a constraint also locks each table whose
+   foreign key needs that constraint. Two threads can then take the same locks in
+   opposite order.
+
+   A foreign key in test YAML does not add an edge between the two models. It only
+   makes the test depend on both models. The two tables have no relative build
+   order. dbt can build them at the same time.
+
+   To prevent the deadlock, release these constraints one time before the build.
+   The single on-run-start session does this. This macro returns the relations to
+   release. This macro has no side effects. Each call gives the same result. -#}
+
+{%- macro relations_to_rebuild() -%}
+    {%- set rebuild_relations = [] -%}
+
+    {%- if not execute -%}
+        {{ return(rebuild_relations) }}
+    {%- endif -%}
+
+    {%- for node_id in selected_resources -%}
+        {#- graph.nodes uses unique_id as the key. graph.sources holds the sources.
+           dbt does not build sources. This lookup correctly omits them. -#}
+        {%- set node = graph.nodes.get(node_id) -%}
+
+        {%- if node and node.config and node.resource_type in ("model", "seed") -%}
+            {%- set materialized = node.config.get("materialized", "") | string | lower -%}
+
+            {#- A node can set full refresh on or off. This overrides the run flag. -#}
+            {%- set node_full_refresh = node.config.get("full_refresh", none) -%}
+            {%- if node_full_refresh is none -%}
+                {%- set is_full_refresh = flags.FULL_REFRESH -%}
+            {%- else -%}
+                {%- set is_full_refresh = node_full_refresh | string | lower == "true" -%}
+            {%- endif -%}
+
+            {#- table:            dbt always replaces it, so the constraints always go.
+               incremental:      dbt replaces it only for a full refresh.
+               materialized_view: same as incremental.
+               view:             the package does not create constraints on views.
+               ephemeral:        no relation exists.
+               seed:             always. A full refresh drops and recreates it. Any
+                                 other run TRUNCATES it, and a truncate needs the
+                                 constraints gone just as much as a drop does. Leaving
+                                 seeds out left six of them truncating in parallel,
+                                 which deadlocked on Oracle with ORA-00060.
+               snapshot:         dbt never replaces it. -#}
+            {%- set is_rebuilt =
+                ( node.resource_type == "model"
+                  and ( materialized == "table"
+                        or ( materialized in ("incremental", "materialized_view")
+                             and is_full_refresh ) ) )
+                or node.resource_type == "seed" -%}
+
+            {%- if is_rebuilt -%}
+                {#- Do not check if the table exists. The constraint lookups return
+                   no rows for a table that does not exist. The first run does
+                   nothing. -#}
+                {%- do rebuild_relations.append(
+                    api.Relation.create(
+                        database=node.database,
+                        schema=node.schema,
+                        identifier=node.alias or node.name) ) -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+
+    {{ return(rebuild_relations) }}
+{%- endmacro -%}
+
+
+
+{#- Release the constraints on each relation that this run drops or replaces.
+
+   Add this macro to on-run-start. It runs the same DDL as the drop_relation
+   override, through the same adapter macro. It runs one time, from a single
+   session, before the worker threads start. This removes the lock contention.
+
+   Each adapter must implement release_constraints_for_rebuild to use this macro.
+   The default macro does nothing. Databases that do not enforce constraints stay
+   unchanged. -#}
+
+{%- macro release_constraints_for_rebuild() -%}
+    {%- if execute
+        and var('dbt_constraints_enabled', "false")|string|lower == "true"
+        and var('dbt_constraints_release_before_build', "true")|string|lower == "true" -%}
+
+        {%- set rebuild_relations = dbt_constraints.relations_to_rebuild() -%}
+
+        {%- if rebuild_relations | length > 0 -%}
+            {%- do log("dbt Constraints: releasing constraints on "
+                ~ (rebuild_relations | length)
+                ~ " relation(s) that this run will drop or replace", info=true) -%}
+            {%- do adapter.dispatch('release_constraints_for_rebuild', 'dbt_constraints')(rebuild_relations) -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endmacro -%}
+
+{#- Databases that do not enforce constraints take no locks that matter. They have
+   no constraints to release. Snowflake, BigQuery and Redshift use this macro. -#}
+{%- macro default__release_constraints_for_rebuild(rebuild_relations) -%}
+{%- endmacro -%}
+
+
+
+
 {#- Override dbt's truncate_relation macro to allow us to create adapter specific versions that drop constraints -#}
 
 {% macro truncate_relation(relation) -%}
@@ -318,7 +426,7 @@
             {%- endfor -%}
         {%- endfor -%}
     {%- endif -%}
-    
+
 
     {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests -#}
     {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
