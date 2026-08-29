@@ -1,13 +1,63 @@
 {
   "comment": "dbt version testing matrix - defines which dbt versions to test with each adapter",
+  "version_pinning": [
+    "All versions are EXACT patch pins, not minors. Runs stay reproducible.",
+    "Pins are bumped manually. Authoritative sources:",
+    "  Snowflake supported versions: SELECT SYSTEM$SUPPORTED_DBT_VERSIONS();",
+    "  dbt Fusion channels: https://public.cdn.getdbt.com/fs/versions.json",
+    "The Dockerfile pins dbt-core exactly and the adapter to the matching MINOR.",
+    "Adapter patch numbers are independent of core patch numbers. For example",
+    "dbt-core 1.11.11 exists but dbt-snowflake 1.11.11 does not."
+  ],
   "dbt_versions": {
-    "postgres": ["1.8.0", "1.9.0"],
-    "oracle": ["1.8.0", "1.9.0"],
-    "sqlserver": ["1.8.0", "1.9.0"],
-    "snowflake": ["1.5.0", "1.8.0", "1.9.0", "1.10.0"],
-    "fusion": ["latest"]
+    "postgres": ["1.11.14"],
+    "oracle": ["1.12.3"],
+    "sqlserver": ["1.11.14"],
+    "snowflake": ["1.5.12"],
+    "fusion": ["2.0.0rc212"],
+    "core2": ["2.0.0b2"],
+    "dpos_core": ["1.11.11"],
+    "dpos_fusion": ["2.0.0-preview.186"]
+  },
+  "version_notes": {
+    "coverage": [
+      "Most adapters test only the newest version their adapter package supports,",
+      "to keep the suite affordable. Snowflake carries more cells because it is the",
+      "primary target and because the dbt v2 engines run against it.",
+      "postgres 1.11.14 - dbt-postgres tops out at 1.11.0, so 1.12.x is not testable.",
+      "sqlserver 1.11.14 - dbt-sqlserver tops out at 1.11.1, same reason.",
+      "oracle 1.12.3 - dbt-oracle reaches 1.12.0."
+    ],
+    "snowflake": [
+      "1.5.12 is the legacy floor, kept to catch backward-compatibility breaks.",
+      "1.11.11 moved to the dpos_core cell. It runs inside Snowflake instead."
+    ],
+    "fusion": [
+      "2.0.0rc212 is the newest dbt release on PyPI and equals the dbt Labs 'stable'",
+      "channel, NOT 'latest'. CDN latest (preview.218) is not published to PyPI.",
+      "rc186 moved to the dpos_fusion cell. It runs inside Snowflake instead.",
+      "preview.175 is also supported by Snowflake but the PyPI rc series starts at",
+      "rc178, so it cannot be installed with uv and is not covered here."
+    ],
+    "dpos": [
+      "The dpos_core and dpos_fusion cells run dbt INSIDE Snowflake, through",
+      "dbt Projects on Snowflake. No dbt client runs on the host for these cells.",
+      "Version strings use the Snowflake form, not the PyPI form. For example",
+      "Snowflake reports 2.0.0-preview.186 where PyPI publishes 2.0.0rc186.",
+      "Authoritative list: SELECT SYSTEM$SUPPORTED_DBT_VERSIONS();",
+      "As of 2026-08-29 it returns dbt Core 1.9.4, 1.10.15, 1.11.11 and",
+      "dbt Fusion 2.0.0-preview, 2.0.0-preview.175, 2.0.0-preview.186.",
+      "dbt Core 2.0 betas are not a dbt Projects on Snowflake engine, so the",
+      "core2 cell cannot move and stays on the host."
+    ],
+    "core2": [
+      "2.0.0b2 is dbt Core 2.0, the Apache 2.0 foundation behind Fusion. It is NOT",
+      "Fusion: no SQL comprehension, no LSP, no dbt lint. Do not confuse it with the",
+      "'dbt' package, whose stable 1.0.0.40.21 release is the old dbt Cloud CLI."
+    ]
   },
   "adapters": {
+    "comment": "Descriptive only. The test code reads dbt_versions and ignores this block.",
     "postgres": {
       "package": "dbt-postgres",
       "image": "postgres:17-bookworm"
@@ -24,10 +74,25 @@
       "package": "dbt-snowflake",
       "image": null
     },
-    "fusion": {
-      "package": "dbt-fusion",
+    "dpos_core": {
+      "package": null,
       "image": null,
-      "comment": "dbt Fusion - next-gen dbt engine, uses Snowflake credentials"
+      "comment": "dbt Core inside Snowflake. Snowflake supplies the engine, so no package installs on the host. The host venv only runs dbt deps while staging the project."
+    },
+    "dpos_fusion": {
+      "package": null,
+      "image": null,
+      "comment": "dbt Fusion inside Snowflake. Same as dpos_core: Snowflake supplies the engine."
+    },
+    "fusion": {
+      "package": "dbt",
+      "image": null,
+      "comment": "dbt Fusion - Rust engine. Adds SQL comprehension, LSP and dbt lint on top of dbt Core 2.0. Uses Snowflake credentials."
+    },
+    "core2": {
+      "package": "dbt-core",
+      "image": null,
+      "comment": "dbt Core 2.0 - the Apache 2.0 foundation behind Fusion. Not Fusion: no SQL comprehension, LSP or dbt lint. Uses Snowflake credentials."
     }
   }
 }
