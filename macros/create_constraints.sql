@@ -402,6 +402,20 @@
 {%- endmacro -%}
 
 
+{#- Return the type of object that a node builds.
+   A custom materialization declares the type that it builds with meta.materialized.
+   Read meta.materialized first. Read config.materialized second.
+   Return "other" if the node sets neither property.
+   Do not give meta.materialized a literal default value. A literal default makes
+   every comparison true, because most nodes do not set meta.materialized. -#}
+{%- macro effective_materialization(node) -%}
+    {%- if node and node.config -%}
+        {{ return(node.config.get("meta", {}).get("materialized", node.config.get("materialized", "other"))) }}
+    {%- endif -%}
+    {{ return("other") }}
+{%- endmacro -%}
+
+
 {#- This macro is called internally and passed which constraint types to create. -#}
 {%- macro create_constraints_by_type(constraint_types, quote_columns, lookup_cache) -%}
 
@@ -506,9 +520,10 @@
                    graph.sources holds the sources. Read graph.sources if the node
                    is absent. -#}
                 {%- set node = graph.nodes.get(table_node) or graph.sources.get(table_node) -%}
+                {#- Read the effective materialization. A custom materialization declares
+                   the type of object it builds with meta.materialized. -#}
                 {%- if node and node.config
-                    and ( node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
-                        or node.config.get("meta", {}).get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
+                    and dbt_constraints.effective_materialization(node) not in ("view", "ephemeral", "dynamic_table")
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and dbt_constraints_sources_enabled
                             and ( ( dbt_constraints_sources_pk_enabled and test_name in("primary_key") )
@@ -536,8 +551,7 @@
                     {#- Append to our list of models for this test -#}
                     {%- do table_models.append(node) -%}
                     {%- if node.resource_type == "source"
-                        or node.config.get("materialized", "other") not in ("table", "incremental", "snapshot", "seed")
-                        or node.config.get("meta", {}).get("materialized", "other") not in ("table", "incremental", "snapshot", "seed") -%}
+                        or dbt_constraints.effective_materialization(node) not in ("table", "incremental", "snapshot", "seed") -%}
                         {#- If we are using a sources or custom materializations, we will need to verify permissions -#}
                         {%- set ns.verify_permissions = true -%}
                     {%- endif -%}
