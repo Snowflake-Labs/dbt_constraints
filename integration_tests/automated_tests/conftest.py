@@ -7,6 +7,7 @@ host, from one uv venv per cell (function scope). See dbt_venv.py.
 
 import json
 import os
+import re
 import secrets
 import shutil
 import string
@@ -613,6 +614,64 @@ def prepared_projects() -> set[str]:
     return set()
 
 
+# Oracle replaces a constraint name longer than 30 characters with
+# PK_/UK_/FK_ || ora_hash(name). See oracle__create_constraints.sql lines 5, 48 and 91.
+# The hash cannot be computed outside the database, so the tests cannot predict the stored
+# name from the model name.
+#
+# Rather than skip those assertions, ask Oracle for the mapping once per session and
+# substitute the logical name back into the build log. Every assertion then reads the same
+# names on every adapter, and no test has to know that Oracle hashes anything.
+ORACLE_MAX_IDENTIFIER = 30
+
+# Every constraint name longer than ORACLE_MAX_IDENTIFIER that a test asserts on, positive
+# or negative. Add to this list when a test starts asserting on a new long name; the
+# de-hash helper fails with a clear message rather than silently missing a substitution.
+ORACLE_LONG_NAMES = (
+    "FACT_ORDER_LINE_L_ORDERKEY_L_LINENUMBER_PK",
+    "DIM_PART_SUPPLIER_PS_PARTKEY_PS_SUPPKEY_PK",
+    "FACT_ORDER_LINE_L_PARTKEY_L_SUPPKEY_FK",
+    "DIM_ORDERS_NULL_KEYS_O_ORDERKEY_SEQ_UK",
+    "DIM_ORDERS_NULL_KEYS_O_CUSTKEY_FK",
+    "DIM_CUSTOMERS_VIEW_C_CUSTKEY_SEQ_UK",
+    "DIM_CUSTOMERS_VIEW_C_CUSTKEY_PK",
+    "DIM_DUPLICATE_ORDERS_O_ORDERKEY_SEQ_UK",
+    "DIM_DUPLICATE_ORDERS_O_ORDERKEY_PK",
+    "DIM_DUPLICATE_ORDERS_O_ORDERKEY_UK",
+    "ISSUE_105_PARENT_CUSTOM_SCHEMA_ID_PK",
+    "ISSUE_105_CHILD_CUSTOM_SCHEMA_CHILD_ID_PK",
+    "ISSUE_105_CHILD_CUSTOM_SCHEMA_PARENT_ID_FK",
+    "CHILD_WITH_ALIAS_TEST_CHILD_ID_PK",
+    "CHILD_WITH_ALIAS_TEST_PARENT_ID_FK",
+)
+
+# ora_hash prefix by name suffix.
+_ORACLE_PREFIX = {"PK": "PK_", "UK": "UK_", "FK": "FK_"}
+
+
+def _oracle_hash_query() -> str:
+    """
+    Return one query that maps every long name to the name Oracle stores.
+
+    Emit a SINGLE column of "LOGICAL=STORED". `dbt run-operation --args` parses its value
+    as a YAML flow mapping, where a comma separates entries, so a query with a comma in it
+    is rejected as invalid YAML. Concatenation and `union all` need no commas.
+    """
+    rows = []
+    for name in ORACLE_LONG_NAMES:
+        prefix = _ORACLE_PREFIX[name.rsplit("_", 1)[-1]]
+        rows.append(
+            f"select '{name}' || '=' || '{prefix}' || ora_hash('{name}') as m from dual"
+        )
+    return " union all ".join(rows)
+
+
+@pytest.fixture(scope="session")
+def oracle_name_map() -> dict[str, str]:
+    """Cache the Oracle hashed-name mapping for the session. Empty until built."""
+    return {}
+
+
 @pytest.fixture(scope="session")
 def baseline_outputs() -> dict[str, str]:
     """Hold the captured output of each cell's preparation build.
@@ -1013,9 +1072,58 @@ def target(database):
     return database
 
 
+def _dehash_oracle_log(
+    log: str, target: str, run_dbt, oracle_name_map: dict[str, str]
+) -> str:
+    """
+    Substitute the logical constraint name back into an Oracle build log.
+
+    Oracle stores a name longer than ORACLE_MAX_IDENTIFIER as PK_/UK_/FK_ || ora_hash(name),
+    so its log reads "creating primary key: pk_579473458". Ask Oracle for the mapping once
+    per session, then replace each hashed name with the name the tests expect. Every
+    assertion then reads the same names on every adapter.
+
+    Return the log unchanged for any other adapter.
+    """
+    if target != "oracle":
+        return log
+
+    if not oracle_name_map:
+        result = run_dbt(
+            'dbt run-operation query --args "{sql: ' + _oracle_hash_query() + '}"',
+            check=False,
+        )
+        if result.returncode != 0:
+            pytest.fail(
+                "Could not read the Oracle hashed-constraint-name mapping, so the build "
+                "log cannot be translated:\n"
+                f"{result.stdout}\n{result.stderr}"
+            )
+        # The query macro logs one row per line as "QUERY RESULT: LOGICAL=STORED".
+        for logical, stored in re.findall(r"QUERY RESULT: (\S+?)=(\S+)", result.stdout):
+            oracle_name_map[logical.upper()] = stored.upper()
+
+        missing = [n for n in ORACLE_LONG_NAMES if n not in oracle_name_map]
+        if missing:
+            pytest.fail(
+                "Oracle did not return a hashed name for: "
+                + ", ".join(missing)
+                + ". The build log cannot be translated for those constraints."
+            )
+
+    for logical, stored in oracle_name_map.items():
+        log = log.replace(stored.lower(), logical.lower())
+    return log
+
+
 @pytest.fixture(scope="function")
 def baseline_build(
-    run_dbt, database: str, dbt_version: str, baseline_outputs: dict[str, str]
+    run_dbt,
+    database: str,
+    dbt_version: str,
+    target: str,
+    baseline_outputs: dict[str, str],
+    oracle_name_map: dict[str, str],
 ) -> str:
     """
     Return the log of this cell's one full build, as lower-case text.
@@ -1045,7 +1153,7 @@ def baseline_build(
             "baseline log to assert against. Read the preparation output above for the "
             "cause. This is a setup failure, not a constraint failure."
         )
-    return output.lower()
+    return _dehash_oracle_log(output.lower(), target, run_dbt, oracle_name_map)
 
 
 @pytest.fixture(scope="session")

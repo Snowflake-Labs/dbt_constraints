@@ -18,7 +18,7 @@ import re
 import pytest
 
 # Adapters that have a verified constraint catalog query in assert_source_constraints.
-SUPPORTED_TARGETS = ("postgres", "snowflake", "fusion")
+SUPPORTED_TARGETS = ("postgres", "snowflake", "fusion", "core2")
 
 # The package creates constraints in an on-run-end hook. That hook runs after the
 # tests. The guard test does nothing unless this variable turns it on, and it must

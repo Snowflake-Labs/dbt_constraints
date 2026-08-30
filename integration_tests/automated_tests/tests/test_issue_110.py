@@ -46,9 +46,9 @@ UPDATE_PREFIX = "updating constraint:"
 
 
 def _is_snowflake(target: str) -> bool:
-    # RELY/NORELY is a Snowflake-only feature. Only the snowflake and fusion
-    # targets exercise the patched macros. The in-database cells report "snowflake".
-    return target in ("snowflake", "fusion")
+    # RELY/NORELY is a Snowflake-only feature. snowflake, fusion and core2 all run
+    # against Snowflake, and the in-database cells report "snowflake".
+    return target in ("snowflake", "fusion", "core2")
 
 
 def _skip_unless_snowflake(target: str) -> None:

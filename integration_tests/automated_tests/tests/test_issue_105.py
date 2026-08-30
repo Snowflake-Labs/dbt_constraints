@@ -61,12 +61,6 @@ BUG_PATTERNS = (
 )
 
 
-# Oracle replaces a constraint name longer than this with PK_/UK_/FK_ || ora_hash(name).
-# See oracle__create_constraints.sql. The hashed name cannot be predicted from the model
-# name, so an exact-name assertion cannot apply to it.
-ORACLE_MAX_IDENTIFIER = 30
-
-
 def _creating_line(constraint_name: str) -> str:
     """
     Return the exact log line the package writes when it CREATES this constraint.
@@ -80,14 +74,8 @@ def _creating_line(constraint_name: str) -> str:
     return f"creating {kinds[suffix]}: {constraint_name}"
 
 
-def assert_created(baseline_build: str, constraint_name: str, target: str = "") -> None:
+def assert_created(baseline_build: str, constraint_name: str) -> None:
     """Fail unless the build log reports creating this exact constraint."""
-    if target == "oracle" and len(constraint_name) > ORACLE_MAX_IDENTIFIER:
-        pytest.skip(
-            f"Oracle hashes {constraint_name!r} because it exceeds "
-            f"{ORACLE_MAX_IDENTIFIER} characters, so the stored name is "
-            "PK_/UK_/FK_ || ora_hash(...) and cannot be matched by name"
-        )
     line = _creating_line(constraint_name)
     assert line in baseline_build, (
         f"The full build never logged {line!r}. The package did not resolve the "
@@ -129,19 +117,19 @@ class _Issue105Scenario:
         """Verify the parent primary key is created on the customized relation."""
         self._skip_if_unsupported(target)
         parent = PARENT_IDENTIFIERS[self.scenario]
-        assert_created(baseline_build, f"{parent}_id_pk", target)
+        assert_created(baseline_build, f"{parent}_id_pk")
 
     def test_child_table_created(self, baseline_build, target):
         """Verify the child primary key is created on the customized relation."""
         self._skip_if_unsupported(target)
         child = CHILD_IDENTIFIERS[self.scenario]
-        assert_created(baseline_build, f"{child}_child_id_pk", target)
+        assert_created(baseline_build, f"{child}_child_id_pk")
 
     def test_foreign_key_constraint_created(self, baseline_build, target):
         """Verify the FK is created even though the parent is customized."""
         self._skip_if_unsupported(target)
         child = CHILD_IDENTIFIERS[self.scenario]
-        assert_created(baseline_build, f"{child}_parent_id_fk", target)
+        assert_created(baseline_build, f"{child}_parent_id_fk")
         assert_no_bug_symptoms(baseline_build)
 
 
@@ -199,6 +187,4 @@ def test_issue_105_regression(baseline_build, target):
         scenarios += ["custom_database", "all_custom"]
 
     for scenario in scenarios:
-        assert_created(
-            baseline_build, f"{CHILD_IDENTIFIERS[scenario]}_parent_id_fk", target
-        )
+        assert_created(baseline_build, f"{CHILD_IDENTIFIERS[scenario]}_parent_id_fk")
