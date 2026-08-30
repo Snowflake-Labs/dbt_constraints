@@ -139,7 +139,7 @@ python3 -m pytest tests/test_issue_105.py::test_issue_105_regression --database 
 |------------|--------|-------------|-------|
 | PostgreSQL | ✅     | Auto-generated | Fast, recommended for CI |
 | Oracle     | ✅     | Auto-generated | Slow startup (~5 min) |
-| SQL Server | ✅     | Auto-generated | Experimental |
+| SQL Server | ❌     | n/a | Not supported: the package has no sqlserver__create_constraints macro |
 | Snowflake  | ✅     | Private key (`.env`) | Cloud service, no container needed |
 | dbt Fusion | ✅     | Private key (`.env`) | dbt v2 engine, runs on Snowflake |
 | dbt Core 2 | ✅     | Private key (`.env`) | dbt v2 engine, runs on Snowflake |

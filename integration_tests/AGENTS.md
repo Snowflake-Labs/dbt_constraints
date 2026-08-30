@@ -32,8 +32,7 @@ integration_tests/
 
 ## Two projects, many targets
 
-- `dbt-core/` runs on the adapter databases: `postgres`, `oracle`, `sqlserver`,
-  `snowflake`, and on the in-database `dpos_core` cell.
+- `dbt-core/` runs on the adapter databases: `postgres`, `oracle`, `snowflake`, and on the in-database `dpos_core` cell.
 - `dbt-fusion/` runs on the dbt v2 engine targets: `fusion` and `core2`, and on
   the in-database `dpos_fusion` cell. Those targets parse this project. Keep the
   two source trees in sync when you edit models, sources, macros, or schema YAML.
@@ -45,7 +44,7 @@ A cell runs dbt in one of two places. `conftest.py` dispatches on the database k
 
 | Mode | Keys | Where dbt runs |
 |---|---|---|
-| Host | `postgres` `oracle` `sqlserver` `snowflake` `fusion` `core2` | a cached uv venv on this machine |
+| Host | `postgres` `oracle` `snowflake` `fusion` `core2` | a cached uv venv on this machine |
 | In-database | `dpos_core` `dpos_fusion` | inside Snowflake, through dbt Projects on Snowflake |
 
 Both modes return a `subprocess.CompletedProcess`, because the in-database mode
@@ -143,13 +142,17 @@ fails. `python3 -m` puts the working directory on `sys.path` and the import reso
 
 Selectors:
 
-- `--database {postgres,oracle,sqlserver,snowflake,fusion,core2,dpos_core,dpos_fusion}`
+- `--database {postgres,oracle,snowflake,fusion,core2,dpos_core,dpos_fusion}`
 - `--dbt-version <exact pin>`
-- `-m {postgres,oracle,sqlserver,snowflake,fast,slow}`
+- `-m {postgres,oracle,snowflake,fast,slow}`
 
 Cloud targets (`snowflake`, `fusion`, `core2`) start no container and need
-Snowflake credentials. `sqlserver` skips clearly on a host without the
-msodbcsql18 driver.
+Snowflake credentials.
+
+sqlserver is deliberately absent from the matrix. The package implements bigquery,
+oracle, postgres, redshift, snowflake and vertica, with no sqlserver__ and no default__,
+so its on-run-end hook fails at macro dispatch. Add a cell back only after the package
+supports SQL Server.
 
 The in-database targets (`dpos_core`, `dpos_fusion`) additionally need
 `SNOWFLAKE_CONNECTION_NAME` in `.env`, naming a `connections.toml` entry for the same
