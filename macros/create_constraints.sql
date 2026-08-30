@@ -407,8 +407,13 @@
    Read meta.materialized first. Read config.materialized second.
    Return "other" if the node sets neither property.
    Do not give meta.materialized a literal default value. A literal default makes
-   every comparison true, because most nodes do not set meta.materialized. -#}
-{%- macro effective_materialization(node) -%}
+   every comparison true, because most nodes do not set meta.materialized.
+
+   Do not put the text "materialization" in this macro name. dbt 1.5 treats any
+   macro whose name holds that text as a materialization macro. It then demands a
+   supported_languages argument and fails the parse. dbt 1.11 and later test the
+   block type instead, but this package still supports the older versions. -#}
+{%- macro effective_materialized(node) -%}
     {%- if node and node.config -%}
         {{ return(node.config.get("meta", {}).get("materialized", node.config.get("materialized", "other"))) }}
     {%- endif -%}
@@ -523,7 +528,7 @@
                 {#- Read the effective materialization. A custom materialization declares
                    the type of object it builds with meta.materialized. -#}
                 {%- if node and node.config
-                    and dbt_constraints.effective_materialization(node) not in ("view", "ephemeral", "dynamic_table")
+                    and dbt_constraints.effective_materialized(node) not in ("view", "ephemeral", "dynamic_table")
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and dbt_constraints_sources_enabled
                             and ( ( dbt_constraints_sources_pk_enabled and test_name in("primary_key") )
@@ -551,7 +556,7 @@
                     {#- Append to our list of models for this test -#}
                     {%- do table_models.append(node) -%}
                     {%- if node.resource_type == "source"
-                        or dbt_constraints.effective_materialization(node) not in ("table", "incremental", "snapshot", "seed") -%}
+                        or dbt_constraints.effective_materialized(node) not in ("table", "incremental", "snapshot", "seed") -%}
                         {#- If we are using a sources or custom materializations, we will need to verify permissions -#}
                         {%- set ns.verify_permissions = true -%}
                     {%- endif -%}

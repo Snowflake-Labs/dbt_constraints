@@ -22,7 +22,7 @@ That produced two separate faults:
 `meta.materialized` is an override, not an independent property. A custom
 materialization uses it to declare the kind of object it builds. The fix reads
 `meta.materialized` first and falls back to `config.materialized`, in the new
-`dbt_constraints.effective_materialization` macro.
+`dbt_constraints.effective_materialized` macro.
 
 ## Why this is tested with run-operation and not with a build
 
@@ -31,18 +31,18 @@ In this test account dbt owns every table, so the pre-check passes and a build
 creates the constraints whether or not the bug is present. A build assertion
 would therefore pass both before and after the fix and would prove nothing.
 
-`assert_effective_materialization` instead calls the macro directly with
+`assert_effective_materialized` instead calls the macro directly with
 synthetic nodes and checks both decisions that the real code derives from it.
 It fails on the unfixed macro and passes on the fixed one.
 
-See macros/issue_131/assert_effective_materialization.sql in each test project.
+See macros/issue_131/assert_effective_materialized.sql in each test project.
 """
 
 # type: ignore
 import pytest
 
 # The message that the assertion macro logs when every case passes.
-PASS_MESSAGE = "assert_effective_materialization passed"
+PASS_MESSAGE = "assert_effective_materialized passed"
 
 # Text of the log line that the adapter macros emit when the ownership
 # pre-check fails. The package logs some of these at info level.
@@ -50,7 +50,7 @@ PRIVILEGE_SKIP = "because of insufficient privileges"
 
 
 @pytest.mark.issue_131
-def test_effective_materialization_reads_config_when_meta_is_absent(run_dbt, target):
+def test_effective_materialized_reads_config_when_meta_is_absent(run_dbt, target):
     """
     Check every materialization case through the package macro.
 
@@ -58,10 +58,10 @@ def test_effective_materialization_reads_config_when_meta_is_absent(run_dbt, tar
     case reads the wrong materialization, or derives the wrong decision for
     the view exclusion or for verify_permissions.
     """
-    result = run_dbt("dbt run-operation assert_effective_materialization")
+    result = run_dbt("dbt run-operation assert_effective_materialized")
 
     assert result.returncode == 0, (
-        f"assert_effective_materialization failed on {target}.\n{result.stdout}"
+        f"assert_effective_materialized failed on {target}.\n{result.stdout}"
     )
     assert PASS_MESSAGE in result.stdout, (
         "The assertion macro did not report a pass. The operation may not have "

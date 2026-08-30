@@ -1,7 +1,7 @@
-{#- Check the effective_materialization macro and the two decisions that use it.
+{#- Check the effective_materialized macro and the two decisions that use it.
 
    Run this operation with:
-       dbt run-operation assert_effective_materialization
+       dbt run-operation assert_effective_materialized
 
    The operation raises a compiler error if any case returns a wrong value.
 
@@ -10,7 +10,7 @@
    One clause set verify_permissions to true for every model. The permission check
    then failed and the package skipped every constraint.
    The other clause stopped the view and ephemeral exclusion from working. -#}
-{%- macro assert_effective_materialization() -%}
+{%- macro assert_effective_materialized() -%}
 
     {#- Each case holds the node, the expected materialization, and the two
        expected decisions. "excluded" means the package must skip the node.
@@ -105,7 +105,7 @@
     {%- set failures = [] -%}
 
     {%- for case in cases -%}
-        {%- set actual = dbt_constraints.effective_materialization(case["node"]) -%}
+        {%- set actual = dbt_constraints.effective_materialized(case["node"]) -%}
 
         {%- if actual != case["expected"] -%}
             {%- do failures.append(
@@ -132,10 +132,10 @@
 
     {%- if failures | length > 0 -%}
         {{ exceptions.raise_compiler_error(
-            "assert_effective_materialization found "
+            "assert_effective_materialized found "
             ~ failures | length ~ " failures: " ~ failures | join(" | ")) }}
     {%- endif -%}
 
-    {{ log("assert_effective_materialization passed " ~ cases | length ~ " cases", info=true) }}
+    {{ log("assert_effective_materialized passed " ~ cases | length ~ " cases", info=true) }}
 
 {%- endmacro -%}
