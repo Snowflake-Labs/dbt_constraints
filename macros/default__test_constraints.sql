@@ -12,10 +12,13 @@ NOTE: This test is designed to implement the "primary key" as specified in ANSI 
 {%- set prefixed_columns_list = dbt_constraints.get_prefixed_column_list(column_names, 'pk_test', quote_columns) -%}
 
 {#- This test will return for any duplicates and if any of the key columns is null -#}
+{#- Wrap the model in a subselect. A test that sets the where config receives
+    "(select * from x where ...) dbt_subquery", which already holds an alias.
+    A direct "from {{model}} pk_test" then produces two aliases and invalid SQL. -#}
 select validation_errors.* from (
     select
         {{prefixed_columns_list | join(', ')}}, count(*) as n_records
-    from {{model}} pk_test
+    from (select * from {{model}}) pk_test
     group by {{prefixed_columns_list | join(', ')}}
     having count(*) > 1
         {% for column in prefixed_columns_list -%}
@@ -37,10 +40,11 @@ NOTE: This test is designed to implement the "unique constraint" as specified in
 {%- set prefixed_columns_list = dbt_constraints.get_prefixed_column_list(column_names, 'uk_test', quote_columns) -%}
 
 {#- This test will return any duplicates -#}
+{#- Wrap the model in a subselect. See the note in default__test_primary_key. -#}
 select validation_errors.* from (
     select
         {{prefixed_columns_list | join(', ')}}, count(*) as n_records
-    from {{model}} uk_test
+    from (select * from {{model}}) uk_test
     group by {{prefixed_columns_list | join(', ')}}
     having count(*) > 1
 ) validation_errors
@@ -81,7 +85,7 @@ select validation_errors.* from (
     from (
         select
             {{ fk_columns_inner_list | join(', ') }}
-        from {{model}} fk_child_inner
+        from (select * from {{model}}) fk_child_inner
         where 1=1
             {% for column in fk_columns_inner_list -%}
             and {{column}} is not null
