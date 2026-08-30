@@ -325,7 +325,8 @@ def database_compose_files(request) -> dict[str, list[str]]:
     return {
         "postgres": [str(COMPOSE_DIR / "postgres-db.yml")],
         "oracle": [str(COMPOSE_DIR / "oracle-db.yml")],
-        "sqlserver": [str(COMPOSE_DIR / "sqlserver-db.yml")],
+        # sqlserver is not in the matrix: the package has no SQL Server
+        # implementation, so its constraint hook fails at macro dispatch.
         # snowflake: no local database needed (cloud service)
     }
 

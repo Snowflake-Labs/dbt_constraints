@@ -23,7 +23,13 @@ SUPPORTED_TARGETS = ("postgres", "snowflake", "fusion")
 # The package creates constraints in an on-run-end hook. That hook runs after the
 # tests. The guard test does nothing unless this variable turns it on, and it must
 # run in a separate command after `dbt build`.
-GUARD_VARS = "'{assert_source_constraints: true}'"
+# Both catalog guards run in this one `dbt test`, not inside a build. The package
+# creates constraints in an on-run-end hook that runs AFTER tests, so a guard placed
+# in a build would look at constraints the build had just dropped and not yet
+# recreated. assert_fk_parity exists only in the dbt-fusion project; selecting a name
+# that matches nothing is harmless while the other selector matches.
+GUARD_SELECTORS = "assert_source_constraints assert_fk_parity"
+GUARD_VARS = "'{assert_source_constraints: true, assert_fk_parity: true}'"
 
 # Constraints that the package must create on sources. These names are lower case,
 # and the test compares them against lower-case output. Snowflake changes identifiers
@@ -76,7 +82,7 @@ def test_source_constraints_created(run_dbt, baseline_build, target):
     # Check the database catalog. This is the assertion that matters. The log lines
     # above show only that the package made an attempt.
     guard = run_dbt(
-        f"dbt test --select assert_source_constraints --vars {GUARD_VARS}",
+        f"dbt test --select {GUARD_SELECTORS} --vars {GUARD_VARS}",
         check=False,
     )
     assert guard.returncode == 0, (

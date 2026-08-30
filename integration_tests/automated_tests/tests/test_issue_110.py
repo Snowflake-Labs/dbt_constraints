@@ -34,10 +34,8 @@ transition build.
 
 ## Careful: "NORELY" contains "RELY"
 
-An earlier version of this file asserted `"RELY" in output`, which is true for NORELY too.
-That assertion could never tell the two apart, and the test that claimed to check the
-flip back to RELY never checked anything. Always assert the whole log line, including the
-constraint name, as `_updated_to` does below.
+Assert the whole log line, including the constraint name, as `assert_updated_to` does
+below. A check for `"RELY" in output` also matches NORELY.
 """
 
 # type: ignore
@@ -63,7 +61,7 @@ def assert_updated_to(build_log: str, constraint_name: str, rely: str) -> None:
     Fail unless the log shows this constraint being updated to exactly this flag.
 
     Matches the whole line, `updating constraint: <name> <flag>`. Matching the flag alone
-    cannot work, because NORELY ends with RELY.
+    would not work, because NORELY ends with RELY.
     """
     expected = f"{UPDATE_PREFIX} {constraint_name.lower()} {rely.lower()}"
     assert expected in build_log, (
@@ -117,16 +115,24 @@ def test_existing_constraint_found_by_column_not_name(baseline_build, target):
 
 
 @pytest.mark.issue_110
-def test_rely_flips_when_data_degrades(transition_build, target):
+def test_rely_flips_when_data_degrades(request, target, database, dbt_version):
     """
     The realistic sequence: a constraint created RELY must flip to NORELY when the data
     goes bad on a later run.
 
     The pre-staged tests above isolate the same code path inside one build. This one
     covers how a user actually meets the bug, over two builds with changed data.
-    `transition_build` supplies that second build and is shared with other tests.
+
+    `transition_build` is requested only after the Snowflake guard. Naming it as a
+    parameter would run the extra build on every target before the skip could apply, and
+    that build serves no purpose where RELY does not exist.
+
+    `database` and `dbt_version` must stay in the signature even though the body does not
+    use them. conftest.pytest_generate_tests only parametrizes a test when BOTH names are
+    in its fixture closure, and without them this test runs once with no matrix cell.
     """
     _skip_unless_snowflake(target)
+    transition_build = request.getfixturevalue("transition_build")
     assert_updated_to(
         transition_build, "dim_issue_110_rely_flip_o_orderkey_uk", "NORELY"
     )

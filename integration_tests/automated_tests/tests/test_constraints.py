@@ -66,6 +66,21 @@ UK_ALWAYS_CREATE = "dim_orders_null_keys_o_orderkey_seq_uk"
 FK_ALWAYS_CREATE = "dim_orders_null_keys_o_custkey_fk"
 
 
+# Cells whose target database is Snowflake. The dpos_* cells already report "snowflake"
+# through the target fixture; these three report their own key.
+#
+# Snowflake supports the RELY/NORELY flag on a constraint, and
+# create_constraints.sql only skips a constraint from a failed test when the adapter does
+# NOT support that flag. So these cells record a failed test as NORELY, while postgres,
+# oracle and sqlserver create nothing.
+SNOWFLAKE_TARGETS = ("snowflake", "fusion", "core2")
+
+# Oracle replaces a constraint name longer than this with PK_/UK_/FK_ || ora_hash(name).
+# See oracle__create_constraints.sql. The hashed name cannot be predicted from the model
+# name, so an exact-name assertion cannot apply to it.
+ORACLE_MAX_IDENTIFIER = 30
+
+
 def _creating_line(constraint_name: str) -> str:
     """
     Return the exact log line the package writes when it CREATES this constraint.
@@ -88,8 +103,19 @@ def _creating_line(constraint_name: str) -> str:
     return f"creating {kinds[suffix]}: {constraint_name}"
 
 
-def assert_created(baseline_build: str, constraint_name: str) -> None:
+def _skip_if_oracle_hashes(target: str, constraint_name: str) -> None:
+    """Skip when Oracle would store this constraint under a hashed name."""
+    if target == "oracle" and len(constraint_name) > ORACLE_MAX_IDENTIFIER:
+        pytest.skip(
+            f"Oracle hashes {constraint_name!r} because it exceeds "
+            f"{ORACLE_MAX_IDENTIFIER} characters, so the stored name is "
+            "PK_/UK_/FK_ || ora_hash(...) and cannot be matched by name"
+        )
+
+
+def assert_created(baseline_build: str, constraint_name: str, target: str = "") -> None:
     """Fail unless the build log reports creating this exact constraint."""
+    _skip_if_oracle_hashes(target, constraint_name)
     line = _creating_line(constraint_name)
     assert line in baseline_build, (
         f"The full build never logged {line!r}. Either the package skipped this "
@@ -105,8 +131,11 @@ def assert_created(baseline_build: str, constraint_name: str) -> None:
     )
 
 
-def assert_not_created(baseline_build: str, constraint_name: str) -> None:
+def assert_not_created(
+    baseline_build: str, constraint_name: str, target: str = ""
+) -> None:
     """Fail if the build log reports creating this constraint."""
+    _skip_if_oracle_hashes(target, constraint_name)
     line = _creating_line(constraint_name)
     assert line not in baseline_build, (
         f"The build logged {line!r}, and it must not. The package must skip a "
@@ -123,9 +152,9 @@ def assert_not_created(baseline_build: str, constraint_name: str) -> None:
         PK_DIM_CUSTOMERS,
     ],
 )
-def test_primary_key_creation(baseline_build, constraint_name):
+def test_primary_key_creation(baseline_build, constraint_name, target):
     """Test that primary key constraints are created for models."""
-    assert_created(baseline_build, constraint_name)
+    assert_created(baseline_build, constraint_name, target)
 
 
 @pytest.mark.parametrize(
@@ -137,70 +166,94 @@ def test_primary_key_creation(baseline_build, constraint_name):
         UK_DIM_ORDERS,
     ],
 )
-def test_unique_key_creation(baseline_build, constraint_name):
+def test_unique_key_creation(baseline_build, constraint_name, target):
     """Test that unique key constraints are created for models."""
-    assert_created(baseline_build, constraint_name)
+    assert_created(baseline_build, constraint_name, target)
 
 
-def test_foreign_key_creation(baseline_build):
+def test_foreign_key_creation(baseline_build, target):
     """Test that foreign key constraints are created.
 
     dim_orders.o_custkey references dim_customers.c_custkey. The build creates the
     parent before the child, so a single full build proves the ordering as well.
     """
-    assert_created(baseline_build, FK_DIM_ORDERS)
+    assert_created(baseline_build, FK_DIM_ORDERS, target)
 
 
-def test_multi_column_primary_key(baseline_build):
+def test_multi_column_primary_key(baseline_build, target):
     """Test that multi-column primary keys are created."""
-    assert_created(baseline_build, PK_MULTI_COLUMN)
-    assert_created(baseline_build, PK_DIM_PART_SUPPLIER)
+    assert_created(baseline_build, PK_MULTI_COLUMN, target)
+    assert_created(baseline_build, PK_DIM_PART_SUPPLIER, target)
 
 
-def test_multi_column_foreign_key(baseline_build):
+def test_multi_column_foreign_key(baseline_build, target):
     """Test that multi-column foreign keys are created."""
-    assert_created(baseline_build, FK_MULTI_COLUMN)
+    assert_created(baseline_build, FK_MULTI_COLUMN, target)
 
 
-def test_constraints_not_created_on_views(baseline_build):
+def test_constraints_not_created_on_views(baseline_build, target):
     """Test that constraints are not created on views.
 
     dim_customers_view declares a primary key and a unique key. It materializes as a
     view, so the package must run the tests and create neither constraint.
     """
-    assert_not_created(baseline_build, "dim_customers_view_c_custkey_pk")
-    assert_not_created(baseline_build, "dim_customers_view_c_custkey_seq_uk")
+    assert_not_created(baseline_build, "dim_customers_view_c_custkey_pk", target)
+    assert_not_created(baseline_build, "dim_customers_view_c_custkey_seq_uk", target)
 
 
-def test_failed_test_no_constraint(baseline_build):
+def test_failed_test_no_constraint(baseline_build, target):
     """Test that constraints are not created when tests fail.
 
-    dim_skip_constraint_on_fail holds duplicate o_orderkey values, and its unique_key test
-    sets always_create_constraint: false. The test fails, so the package must skip the
-    constraint.
+    dim_duplicate_orders holds duplicate values, so its primary key and unique key tests
+    fail and produce a NORELY rely_clause.
 
-    The override matters. dbt_project.yml sets `+always_create_constraint: true` for every
-    test in this project, so without it the package creates the constraint despite the
-    failure. dim_duplicate_orders is therefore NOT usable for this check: its constraints
-    ARE created, correctly, because of that project setting.
+    create_constraints.sql requires `rely_clause == 'RELY'` OR the adapter to support
+    RELY/NORELY. On an adapter without that support, a failed test therefore creates no
+    constraint at all. Snowflake does support it and records the constraint as NORELY
+    instead, which test_failed_test_creates_norely covers.
     """
-    assert_not_created(baseline_build, "dim_skip_constraint_on_fail_o_orderkey_uk")
+    if target in SNOWFLAKE_TARGETS:
+        pytest.skip("Snowflake records a failed test as NORELY, see the norely test")
+
+    assert_not_created(baseline_build, "dim_duplicate_orders_o_orderkey_pk", target)
+    assert_not_created(baseline_build, "dim_duplicate_orders_o_orderkey_uk", target)
+    assert_not_created(baseline_build, "dim_duplicate_orders_o_orderkey_seq_uk", target)
 
 
-def test_always_create_constraint_config(baseline_build):
+@pytest.mark.snowflake
+def test_failed_test_creates_norely(baseline_build, target):
+    """A failed test on Snowflake creates the constraint as NORELY.
+
+    Snowflake supports the rely flag, so the package records the constraint and marks it
+    NORELY rather than skipping it. The flag is the assertion here: a constraint created
+    from a failed test must never be RELY.
+    """
+    if target not in SNOWFLAKE_TARGETS:
+        pytest.skip("Only Snowflake supports RELY/NORELY")
+
+    assert (
+        "creating primary key: dim_duplicate_orders_o_orderkey_pk norely"
+        in baseline_build
+    ), (
+        "Expected the failed primary key on dim_duplicate_orders to be created NORELY. "
+        "Lines the build did log:\n"
+        + "\n".join(
+            line
+            for line in baseline_build.splitlines()
+            if "dim_duplicate_orders" in line and "creating" in line
+        )
+    )
+
+
+def test_always_create_constraint_config(baseline_build, target):
     """Test that always_create_constraint config forces constraint creation.
 
-    dim_duplicate_orders holds duplicate values, so its primary key and unique key tests
-    fail. The project-wide `+always_create_constraint: true` means the package must create
-    the constraints anyway. Compare test_failed_test_no_constraint, which overrides the
-    setting to false on a model with the same kind of failure.
-
-    dim_orders_null_keys is the per-model form of the same setting: its primary key has
-    null values, and its valid unique key and foreign key must still be created.
+    dim_orders_null_keys sets always_create_constraint on the model. Its primary key has
+    null values and stays absent, but the valid unique key and foreign key must still be
+    created.
     """
-    assert_created(baseline_build, "dim_duplicate_orders_o_orderkey_pk")
-    assert_created(baseline_build, UK_ALWAYS_CREATE)
-    assert_created(baseline_build, FK_ALWAYS_CREATE)
+    assert_created(baseline_build, UK_ALWAYS_CREATE, target)
+    assert_created(baseline_build, FK_ALWAYS_CREATE, target)
 
 
 @pytest.mark.postgres
@@ -211,7 +264,7 @@ def test_postgres_specific(baseline_build, target):
 
     # The full build completed, which baseline_build guarantees. Confirm the package
     # created constraints on this adapter rather than skipping every one.
-    assert_created(baseline_build, PK_DIM_PART)
+    assert_created(baseline_build, PK_DIM_PART, target)
 
 
 @pytest.mark.snowflake
@@ -221,7 +274,7 @@ def test_snowflake_specific(baseline_build, target):
         pytest.skip("Snowflake-specific test")
 
     # Snowflake is the only adapter that carries a RELY clause on a constraint.
-    assert_created(baseline_build, PK_DIM_PART)
+    assert_created(baseline_build, PK_DIM_PART, target)
     assert "rely" in baseline_build
 
 
@@ -231,7 +284,7 @@ def test_oracle_specific(baseline_build, target):
     if target != "oracle":
         pytest.skip("Oracle-specific test")
 
-    assert_created(baseline_build, PK_DIM_PART)
+    assert_created(baseline_build, PK_DIM_PART, target)
 
 
 @pytest.mark.sqlserver
@@ -240,7 +293,7 @@ def test_sqlserver_specific(baseline_build, target):
     if target != "sqlserver":
         pytest.skip("SQL Server-specific test")
 
-    assert_created(baseline_build, PK_DIM_PART)
+    assert_created(baseline_build, PK_DIM_PART, target)
 
 
 def test_incremental_rebuild(baseline_build, run_dbt):
