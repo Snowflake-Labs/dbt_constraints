@@ -459,6 +459,32 @@ def start_databases(request, database_compose_files):
     yield databases_to_start
 
 
+# An unquoted Oracle identifier. It starts with a letter, then holds letters, digits,
+# underscore, dollar or hash, up to 128 characters.
+ORACLE_IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
+
+
+def _check_oracle_identifier(name: str, source: str) -> None:
+    """
+    Raise RuntimeError unless name is a plain unquoted Oracle identifier.
+
+    Oracle cannot bind an identifier in DDL, so the caller builds the statement text
+    from these names. The statement then runs inside EXECUTE IMMEDIATE '...' as SYSDBA.
+    A name that holds a quote would end that string and run as SYSDBA, so check the
+    name instead of escaping it.
+
+    Args:
+        name: The identifier to check.
+        source: Where the value came from. The message names it.
+    """
+    if not ORACLE_IDENTIFIER.match(name):
+        raise RuntimeError(
+            f"{source} is {name!r}, which is not a plain Oracle identifier. "
+            "Use only a letter followed by letters, digits, underscore, dollar or "
+            "hash. This test builds DDL from the value, so it refuses unexpected text."
+        )
+
+
 def _create_oracle_custom_schema(request) -> None:
     """
     Create the extra schema the issue_105 tests need on Oracle.
@@ -474,6 +500,11 @@ def _create_oracle_custom_schema(request) -> None:
     env_name = os.environ.get("DBT_TEST_ENV", "dev")
     custom_schema = f"test_schema_{env_name}".upper()
     app_user = os.environ.get("ORACLE_USER", "")
+
+    # Check both names before they reach the DDL below.
+    _check_oracle_identifier(custom_schema, "The schema name from DBT_TEST_ENV")
+    if app_user:
+        _check_oracle_identifier(app_user, "ORACLE_USER")
 
     # Discover the container rather than rebuilding its name. oracle-db.yml derives the
     # name from COMPOSE_PROJECT_NAME, which is not exported to this process.
