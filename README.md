@@ -1,6 +1,6 @@
 # dbt Constraints Package
 
-This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, Oracle, Redshift, and Vertica only.
+This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, Oracle, Redshift, BigQuery, and Vertica only.
 
 ## How the dbt Constraints Package differs from dbt's Model Contracts feature
 
@@ -24,14 +24,14 @@ When you add this package, dbt will automatically begin to create __unique keys_
 
 The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation. By default dbt Constraints only creates constraints on models. To allow constraints on sources, you can set `dbt_constraints_sources_enabled` to `true`. The package will verify that you have sufficient database privileges to create constraints on sources.
 
-> **Behaviour change: constraints on sources now work.**
-> The source variables below had no effect in earlier releases. The package looked
-> up test dependencies in `graph.nodes`, but dbt holds sources in `graph.sources`,
-> so every source dependency resolved to nothing and no constraint was created.
-> If you already set `dbt_constraints_sources_enabled: true`, the package will now
-> start issuing DDL against your source tables on the next run. Confirm that the
-> dbt role should be altering those tables before you upgrade. Set
-> `dbt_constraints_sources_enabled: false` to keep the previous behaviour.
+> **Bug fix: `dbt_constraints_sources_enabled` now takes effect.**
+> Earlier releases did not create constraints on sources. The package looked up test
+> dependencies in `graph.nodes`, but dbt holds sources in `graph.sources`, so every
+> source dependency resolved to nothing and no DDL was issued.
+> If you already set `dbt_constraints_sources_enabled: true`, the package starts
+> creating constraints on your source tables after you upgrade. Confirm that the dbt
+> role should alter those tables. Set `dbt_constraints_sources_enabled: false` to
+> turn source constraints off.
 
 ```yml
 vars:
@@ -128,7 +128,7 @@ packages:
 
 * The package's macros depend on the results and graph object schemas of dbt >=1.0.0
 
-* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
+* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, Oracle, Redshift, BigQuery, and Vertica. To add support for other databases, it is necessary to implement the following eight macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
 
 ```sql
 <ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
@@ -140,6 +140,8 @@ packages:
 <ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions, lookup_cache=none)
 <ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions, lookup_cache=none)
 ```
+
+* One more macro is optional. A database that enforces constraints can deadlock when threads run DDL on tables that a foreign key joins. Implement `<ADAPTER_NAME>__release_constraints_for_rebuild(rebuild_relations)` to drop those constraints in one session before the build starts. The default implementation does nothing, so a database that does not enforce constraints needs no change. The postgres and oracle macros are examples. Users can set `dbt_constraints_release_before_build` to false to drop the constraints during the build instead.
 
 ## RELY and NORELY Properties
 
