@@ -54,10 +54,10 @@ def test_fusion_seed_with_constraints(dbt_runner, target, reset_target):
 @pytest.mark.fusion
 def test_fusion_project_parsing(dbt_runner, target):
     """
-    Test that Fusion can parse the dbt-fusion project correctly.
+    Test that Fusion can parse the current-syntax project correctly.
 
     This verifies that:
-    - The dbt-fusion project structure is correct
+    - The current-syntax project structure is correct
     - YAML files use the correct Fusion format (arguments: wrapper)
     - dbt Fusion can compile the project
     """

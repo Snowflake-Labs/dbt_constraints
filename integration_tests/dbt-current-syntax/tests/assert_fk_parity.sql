@@ -1,12 +1,15 @@
 /*
     FK parity guard for dbt Fusion.
 
-    Asserts that on Snowflake (the only target this Fusion project runs against),
-    the package created at least the expected number of FOREIGN KEY constraints
-    in the test schema. This catches a regression of the upstream Fusion bug
+    Asserts that on Snowflake the package created at least the expected number of
+    FOREIGN KEY constraints in the test schema. This catches a regression of the
+    upstream Fusion bug
     (dbt-fusion#1575) where test_metadata.kwargs would lose the `to` / `field`
     arguments for parameterised generic tests, causing the package to silently
     skip every FK with the "missing from test parameters" log line.
+
+    This project also runs against PostgreSQL and Oracle. The guard returns zero
+    rows on any target that is not Snowflake. See the else branch below.
 
     Lower bound only: counts FKs created by THIS Fusion build's models.
     Run after `dbt build`. Fails (returns rows) if FK count < the lower bound.

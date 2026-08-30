@@ -52,8 +52,11 @@ vars:
   # Enable this parameter if you want to skip using RELY for join elimination
   dbt_constraints_always_norely: false
 
-#on-run-start:
-  #- 'drop table if exists dbt_demo.dim_orders CASCADE'
+# Drop the source_ clones in one single-threaded pass before the seeds run. Doing this
+# in the per-seed post-hook ran concurrent `drop ... cascade` statements against
+# FK-linked clones, which deadlocked on PostgreSQL.
+on-run-start:
+  - "{{ drop_cloned_tables('source_') }}"
 
 models:
   +materialized: table

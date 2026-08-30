@@ -29,25 +29,30 @@ SCRIPTS_DIR = TEST_DIR / "scripts"
 INTEGRATION_TESTS_DIR = TEST_DIR.parent
 PROJECT_ROOT = INTEGRATION_TESTS_DIR.parent
 
-# Project directories for different dbt versions
-DBT_CORE_PROJECT_DIR = INTEGRATION_TESTS_DIR / "dbt-core"
-DBT_FUSION_PROJECT_DIR = INTEGRATION_TESTS_DIR / "dbt-fusion"
+# Project directories. The two projects hold the same models and tests. They differ
+# in the schema.yml syntax that declares the generic tests.
+#   dbt-legacy-syntax  -> test arguments sit directly under the test name
+#   dbt-current-syntax -> test arguments sit under an `arguments:` property
+DBT_LEGACY_SYNTAX_PROJECT_DIR = INTEGRATION_TESTS_DIR / "dbt-legacy-syntax"
+DBT_CURRENT_SYNTAX_PROJECT_DIR = INTEGRATION_TESTS_DIR / "dbt-current-syntax"
+
+# dbt-core added the `arguments:` property for generic tests in 1.10.5. Every
+# engine at this version or later parses the current-syntax project. Older
+# versions parse the legacy-syntax project.
+CURRENT_SYNTAX_MIN_VERSION = (1, 10, 5)
 
 # dbt v2 engine targets. Each one installs a single self-contained wheel and no
-# adapter package. Each one runs against Snowflake and parses the dbt-fusion project:
+# adapter package. Each one runs against Snowflake:
 #   fusion -> the "dbt" package (Fusion)
 #   core2  -> the "dbt-core" 2.x package (the Apache 2.0 base of Fusion)
 V2_ENGINE_TARGETS = ("fusion", "core2")
 
 # Targets that run dbt INSIDE Snowflake, through dbt Projects on Snowflake. No dbt
 # client runs on the host for these cells. Snowflake supplies the engine.
-#   dpos_core   -> dbt Core, parses the dbt-core project
-#   dpos_fusion -> dbt Fusion, parses the dbt-fusion project
+#   dpos_core   -> dbt Core
+#   dpos_fusion -> dbt Fusion
 # See dpos_stage.py and dpos_runner.py.
 DPOS_DATABASES = ("dpos_core", "dpos_fusion")
-
-# Targets that parse the dbt-fusion project directory.
-FUSION_PROJECT_TARGETS = (*V2_ENGINE_TARGETS, "dpos_fusion")
 
 # Targets that have no local database container to start
 CLOUD_DATABASES = ("snowflake", *V2_ENGINE_TARGETS, *DPOS_DATABASES)
@@ -68,12 +73,32 @@ else:
     print(f"\n⚠️  No .env file found at {ENV_FILE} - Snowflake tests will be skipped")
 
 
-def get_project_dir(database: str) -> Path:
-    """Get the appropriate dbt project directory for the database type."""
-    if database in FUSION_PROJECT_TARGETS:
-        return DBT_FUSION_PROJECT_DIR
-    else:
-        return DBT_CORE_PROJECT_DIR
+def parse_dbt_version(dbt_version: str) -> tuple[int, int, int]:
+    """Return the first three release numbers of a dbt version string.
+
+    The function reads each dot separated field up to the first character that
+    is not a digit. A field with no leading digit returns 0.
+
+        "1.5.12"            -> (1, 5, 12)
+        "2.0.0rc212"        -> (2, 0, 0)
+        "2.0.0-preview.186" -> (2, 0, 0)
+    """
+    fields = (dbt_version.split(".") + ["0", "0", "0"])[:3]
+    numbers = [int(re.match(r"\d*", field).group() or 0) for field in fields]
+    return (numbers[0], numbers[1], numbers[2])
+
+
+def get_project_dir(database: str, dbt_version: str) -> Path:
+    """Return the dbt project directory that matches this dbt version.
+
+    dbt-core added the `arguments:` property for generic tests in 1.10.5.
+    Version 1.10.5 and later parse the current-syntax project. Earlier versions
+    parse the legacy-syntax project. The `database` argument is not used. It
+    stays in the signature so callers read as one cell: database plus version.
+    """
+    if parse_dbt_version(dbt_version) >= CURRENT_SYNTAX_MIN_VERSION:
+        return DBT_CURRENT_SYNTAX_PROJECT_DIR
+    return DBT_LEGACY_SYNTAX_PROJECT_DIR
 
 
 def generate_secure_password(length: int = 16, oracle_safe: bool = False) -> str:
@@ -530,7 +555,7 @@ def dbt_env(
     env["COMPOSE_PROJECT_NAME"] = database_project_name  # To connect to DB
 
     # Use host paths. dbt runs on the host, not in a container.
-    project_dir = get_project_dir(database)
+    project_dir = get_project_dir(database, dbt_version)
     env["DBT_PROJECT_DIR"] = str(project_dir)
     env["DBT_PROFILES_DIR"] = str(project_dir)
 
@@ -757,13 +782,15 @@ def dpos_project(
             "the dbt project object is deployed."
         )
 
-    project_dir = get_project_dir(database)
+    project_dir = get_project_dir(database, dbt_version)
     stage_dir = DPOS_STAGE_DIR / database
     dbt_bin = dbt_venv_mod.dbt_executable(dbt_venv)
 
     print(f"\n📦 Staging {project_dir.name} for {database} at {stage_dir}")
     try:
-        dpos_stage_mod.stage_project(project_dir, PROJECT_ROOT, stage_dir, dbt_bin)
+        dpos_stage_mod.stage_project(
+            project_dir, PROJECT_ROOT, stage_dir, dbt_bin, database
+        )
     except RuntimeError as exc:
         pytest.fail(f"Could not stage {database}:\n{exc}")
 
@@ -869,7 +896,7 @@ def run_dbt(
     if database not in start_databases and database not in CLOUD_DATABASES:
         pytest.skip(f"Database {database} not started")
 
-    project_dir = get_project_dir(database)
+    project_dir = get_project_dir(database, dbt_version)
     dbt_bin = dbt_venv_mod.dbt_executable(dbt_venv)
 
     def _run_on_host(command: str) -> subprocess.CompletedProcess:
@@ -1019,7 +1046,7 @@ def dbt_runner(run_dbt):
 
 
 @pytest.fixture(scope="function")
-def reset_target(database: str):
+def reset_target(database: str, dbt_version: str):
     """
     Remove the target directory to force a full recompile.
 
@@ -1032,7 +1059,7 @@ def reset_target(database: str):
         # output inside the deployed object, which is immutable.
         if database in DPOS_DATABASES:
             return
-        target = get_project_dir(database) / "target"
+        target = get_project_dir(database, dbt_version) / "target"
         if target.exists():
             shutil.rmtree(target)
 
@@ -1145,7 +1172,7 @@ def baseline_build(
 
     A test that changes data or needs its own selection or vars must still call `run_dbt`.
     """
-    cell_key = f"{database}:{dbt_version}:{get_project_dir(database).name}"
+    cell_key = f"{database}:{dbt_version}:{get_project_dir(database, dbt_version).name}"
     output = baseline_outputs.get(cell_key)
     if output is None:
         pytest.fail(
@@ -1187,7 +1214,7 @@ def transition_build(
 
     Runs once per cell. Depends on baseline_build so the ordering is guaranteed.
     """
-    cell_key = f"{database}:{dbt_version}:{get_project_dir(database).name}"
+    cell_key = f"{database}:{dbt_version}:{get_project_dir(database, dbt_version).name}"
     if cell_key in transition_outputs:
         return transition_outputs[cell_key]
 

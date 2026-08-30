@@ -27,10 +27,16 @@
       "oracle 1.12.3 - dbt-oracle reaches 1.12.0.",
       "sqlserver is NOT in the matrix. The package has no sqlserver__create_constraints",
       "implementation and no default__, so the on-run-end hook fails at macro dispatch.",
-      "Add a cell back only after the package supports SQL Server."
+      "Add a cell back only after the package supports SQL Server.",
+      "Project choice follows the dbt version, not the adapter. dbt-core added the",
+      "`arguments:` test property in 1.10.5. Cells at 1.10.5 or later parse",
+      "integration_tests/dbt-current-syntax. Earlier cells parse",
+      "integration_tests/dbt-legacy-syntax. See CURRENT_SYNTAX_MIN_VERSION in",
+      "conftest.py. Only the snowflake 1.5.12 cell parses the legacy project."
     ],
     "snowflake": [
       "1.5.12 is the legacy floor, kept to catch backward-compatibility breaks.",
+      "This is the only cell that parses the dbt-legacy-syntax project. Keep it.",
       "1.11.11 moved to the dpos_core cell. It runs inside Snowflake instead."
     ],
     "fusion": [

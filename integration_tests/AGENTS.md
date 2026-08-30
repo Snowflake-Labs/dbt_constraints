@@ -7,7 +7,7 @@ This directory holds the test projects and the automated test harness for the
 
 ```
 integration_tests/
-├── dbt-core/                 # dbt Core reference project
+├── dbt-legacy-syntax/        # older generic test syntax
 │   ├── data/tpc_h_seeds/     # TPC-H seed CSVs
 │   ├── macros/               # clone_table + issue_105 custom naming macros
 │   ├── models/               # dim_*, fact_* models, sources.yml, schema.yml
@@ -16,8 +16,8 @@ integration_tests/
 │   ├── profiles.yml          # local dbt reads this
 │   ├── dbt_projects_profiles.yml  # dbt Projects on Snowflake reads this instead
 │   └── env.yml               # supplies the values that file reads
-├── dbt-fusion/               # dbt Fusion project (also used by the core2 target)
-│   └── (mirrors dbt-core layout)
+├── dbt-current-syntax/       # current `arguments:` test syntax, most cells run this
+│   └── (mirrors dbt-legacy-syntax layout, plus tests/assert_fk_parity.sql)
 └── automated_tests/          # pytest harness
     ├── conftest.py           # fixtures, matrix parametrization, dbt runner
     ├── dbt_venv.py           # per-cell uv virtual environments
@@ -30,13 +30,30 @@ integration_tests/
     └── pytest.ini
 ```
 
-## Two projects, many targets
+## Two projects, chosen by dbt version
 
-- `dbt-core/` runs on the adapter databases: `postgres`, `oracle`, `snowflake`, and on the in-database `dpos_core` cell.
-- `dbt-fusion/` runs on the dbt v2 engine targets: `fusion` and `core2`, and on
-  the in-database `dpos_fusion` cell. Those targets parse this project. Keep the
-  two source trees in sync when you edit models, sources, macros, or schema YAML.
-  `dbt-fusion` wraps test arguments in an `arguments:` key; `dbt-core` does not.
+The harness picks a project by dbt version, not by adapter. dbt-core added the
+`arguments:` property for generic tests in 1.10.5. `get_project_dir` in
+`conftest.py` compares the cell version against `CURRENT_SYNTAX_MIN_VERSION`.
+
+- `dbt-legacy-syntax/` runs on every engine before dbt-core 1.10.5. Only the
+  `snowflake` cell (dbt-core 1.5.12) uses it today. Do not modernise it. It is the
+  only proof that the package still supports older dbt.
+- `dbt-current-syntax/` runs on dbt-core 1.10.5 and later, on the dbt v2 engine
+  targets `fusion` and `core2`, and on both in-database cells. That covers
+  `postgres`, `oracle`, `dpos_core`, and `dpos_fusion`. Keep every model and macro
+  in it portable across PostgreSQL, Oracle, and Snowflake.
+
+Keep the two source trees in sync. Add new coverage to both. Only the `schema.yml`
+files, `models/sources.yml`, `data/tpc_h_seeds/seeds.yml`, and three keys in
+`dbt_project.yml` differ. `dbt-current-syntax` wraps test arguments in an
+`arguments:` key, sets `always_create_constraint` inside `+meta:`, and sets the
+`require_generic_test_arguments_property` flag. `dbt-legacy-syntax` does none of
+those.
+
+Both in-database cells stage from `dbt-current-syntax`, so its `env.yml` declares
+one environment per cell. `stage_project` sets `default_environment` to the cell
+name at stage time, which keeps each cell in its own schema.
 
 ## Two execution modes
 

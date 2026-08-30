@@ -184,7 +184,7 @@ def deploy(
     `--dbt-version` is REQUIRED here, not optional. Snowflake compiles the project when
     it creates the version, and that compile uses the version recorded ON THE OBJECT. It
     does not use the `--dbt-version` passed later to `execute`. Without this flag the
-    object defaults to an older dbt Core, and the dbt-fusion project fails to compile:
+    object defaults to an older dbt Core, and the current-syntax project fails to compile:
     its generic tests use the `arguments:` key, which only Fusion 2.x understands.
 
     No external access integration is passed. The stage already contains dbt_packages,

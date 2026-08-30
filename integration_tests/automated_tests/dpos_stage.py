@@ -21,6 +21,7 @@ implicit `dbt deps` that Fusion runs when `packages.yml` lists dependencies and 
 The stage always tests the current working tree, not a published release.
 """
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -115,22 +116,62 @@ def rewrite_packages_yml(packages_yml: Path) -> None:
     packages_yml.write_text(text.replace(LOCAL_PACKAGE_SOURCE, LOCAL_PACKAGE_STAGED))
 
 
+def rewrite_env_yml(env_yml: Path, environment: str) -> None:
+    """
+    Set default_environment in the staged env.yml to the name of this cell.
+
+    env.yml declares one environment per dbt Projects on Snowflake cell. Each
+    environment writes to its own schema. Snowflake reads default_environment to
+    choose one, and it accepts no environment name on the command line.
+
+    Both DPOS cells stage from the same project directory, so the copied file must
+    be changed per cell. Without this step both cells would use the same schema and
+    would overwrite each other's constraints.
+
+    Raise RuntimeError if the file declares no environment with this name. A silent
+    no-op here would send the cell to the wrong schema, and the tests would then
+    report another cell's results.
+    """
+    text = env_yml.read_text()
+    if f"- name: {environment}\n" not in text:
+        raise RuntimeError(
+            f"{env_yml} declares no environment named '{environment}'. "
+            "Add that environment before you stage this cell."
+        )
+    updated = re.sub(
+        r"^(\s*default_environment:\s*).*$",
+        rf"\g<1>{environment}",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if updated == text and f"default_environment: {environment}" not in text:
+        raise RuntimeError(
+            f"{env_yml} has no default_environment key. The staging step cannot "
+            "choose an environment."
+        )
+    env_yml.write_text(updated)
+
+
 def stage_project(
     project_dir: Path,
     package_root: Path,
     stage_dir: Path,
     dbt_bin: Path,
+    environment: str,
 ) -> Path:
     """
     Build a deployable copy of one dbt project and return the stage directory.
 
     Args:
-        project_dir: The dbt project to deploy, for example integration_tests/dbt-core.
+        project_dir: The dbt project to deploy, for example integration_tests/dbt-current-syntax.
         package_root: The repository root, which holds the package under test.
         stage_dir: The output directory. This function removes and recreates it.
         dbt_bin: A dbt executable on the host, used only to run `dbt deps`.
+        environment: The name of this cell, for example dpos_core. The function
+            sets default_environment in the staged env.yml to this name.
 
-    Raise RuntimeError if the rewrite or `dbt deps` fails.
+    Raise RuntimeError if a rewrite or `dbt deps` fails.
     """
     if stage_dir.exists():
         shutil.rmtree(stage_dir)
@@ -142,6 +183,7 @@ def stage_project(
     shutil.copytree(package_root, package_dest, ignore=_ignore(*PACKAGE_EXCLUDE_DIRS))
 
     rewrite_packages_yml(stage_dir / "packages.yml")
+    rewrite_env_yml(stage_dir / "env.yml", environment)
 
     deps = subprocess.run(
         [str(dbt_bin), "deps"],

@@ -2,8 +2,8 @@
 #
 # dbt Projects on Snowflake reads this file and ignores profiles.yml when both are
 # present. Standard dbt does the opposite: it reads only profiles.yml and never looks at
-# this name. The two files therefore coexist. The local fusion and core2 cells keep using
-# profiles.yml with no change, and the in-database cell uses this file.
+# this name. The two files therefore coexist. The local test cells keep using
+# profiles.yml with no change, and the in-database cells use this file.
 #
 # There are no credentials here. The project runs under the Snowflake session that calls
 # EXECUTE DBT PROJECT, so account, user, password, and key fields are absent. dbt still
