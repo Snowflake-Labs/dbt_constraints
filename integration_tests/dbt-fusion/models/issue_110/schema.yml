@@ -17,13 +17,12 @@ models:
           config:
             severity: warn
 
-
-  # The three models below let ONE build exercise the issue #110 path that only applies
-  # to a constraint that ALREADY exists. Each one's post-hook pre-creates the constraint
-  # with the WRONG rely flag, so the package must correct it during on-run-end.
+  # The three models below let one build exercise the issue #110 path that applies to a
+  # constraint that already exists. Each one's post-hook pre-creates the constraint with
+  # the opposite rely flag, so the package must update it during on-run-end.
   # See macros/stage_existing_constraint.sql.
   - name: dim_issue_110_prestaged_rely
-    description: "Unique data, pre-created NORELY. The package must correct it to RELY."
+    description: "Unique data, pre-created NORELY. The package must update it to RELY."
     columns:
       - name: o_orderkey
         description: "Unique, so the test passes and the flag must become RELY"
@@ -34,7 +33,7 @@ models:
             severity: warn
 
   - name: dim_issue_110_prestaged_norely
-    description: "Duplicated data, pre-created RELY. The package must correct it to NORELY."
+    description: "Duplicated data, pre-created RELY. The package must update it to NORELY."
     columns:
       - name: o_orderkey
         description: "Duplicated, so the test fails and the flag must become NORELY"

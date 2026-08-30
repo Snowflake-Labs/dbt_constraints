@@ -239,15 +239,27 @@ models:
         description: "Part of compound primary key for this table"
         tests:
           - not_null
-          # Testing FK to a source
+          # Testing FK to a source.
+          #
+          # Keep this the ONLY relationships test on ps_suppkey. A constraint name is
+          # built from the CHILD table and the CHILD columns, so a second relationships
+          # test on this same column would generate the identical name
+          # DIM_PART_SUPPLIER_PS_SUPPKEY_FK. The package then creates whichever it
+          # processes first and skips the other as a duplicate, and dbt Core and Fusion
+          # iterate in different orders. The seed FK below therefore uses ps_partkey.
           - relationships:
               arguments:
                 to: source('tpc_h', 'source_supplier')
                 field: s_suppkey
+      - name: ps_partkey
+        description: "Part of compound primary key for this table"
+        tests:
+          # Testing FK to a seed. On a different column from the source FK above so the
+          # two constraint names do not collide.
           - relationships:
               arguments:
-                to: ref('supplier')
-                field: s_suppkey
+                to: ref('part')
+                field: p_partkey
     tests:
       - dbt_constraints.primary_key:
           arguments:

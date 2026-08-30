@@ -11,6 +11,14 @@
     Lower bound only: counts FKs created by THIS Fusion build's models.
     Run after `dbt build`. Fails (returns rows) if FK count < the lower bound.
 
+    IMPORTANT: this test does nothing unless you pass the assert_fk_parity variable. The
+    package creates constraints in an on-run-end hook, which runs AFTER the tests, so on a
+    `--full-refresh` build the constraints do not exist yet while this test runs. Run it in
+    a later command, the same way assert_source_constraints.sql is run:
+
+        dbt build
+        dbt build --vars '{assert_fk_parity: true}'
+
     The expected list is conservative — only constraints whose underlying
     `relationships` / `foreign_key` test definitions live in this project's
     schema.yml files. If you add new FK tests, bump this list.
@@ -28,7 +36,7 @@
     'ISSUE_105_CHILD_CUSTOM_SCHEMA_PARENT_ID_FK',
 ] %}
 
-{% if target.type == 'snowflake' %}
+{% if target.type == 'snowflake' and var('assert_fk_parity', false) %}
 
 WITH expected AS (
     {% for c in expected_fks %}
@@ -36,6 +44,14 @@ WITH expected AS (
     {% endfor %}
 ),
 actual AS (
+    {#- Deliberately NOT filtered to target.schema. The expected list spans schemas and
+        databases: the issue_105 models use custom generate_database_name and
+        generate_schema_name macros, so ISSUE_105_CHILD_CUSTOM_DATABASE_PARENT_ID_FK and
+        ALL_CUSTOM_CHILD_TEST_PARENT_ID_FK do not live in target.schema at all.
+
+        The trade-off is that another schema in the same database can satisfy this count.
+        Restricting it to target.schema makes the cross-schema constraints unfindable and
+        the test fails for the wrong reason. -#}
     SELECT constraint_name
     FROM {{ target.database }}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS
     WHERE constraint_type = 'FOREIGN KEY'
