@@ -1016,18 +1016,17 @@ def run_dbt(
     cell_key = f"{database}:{dbt_version}:{project_dir.name}"
     if cell_key not in prepared_projects:
         # Record the attempt before running it. If preparation fails, every later
-        # test would otherwise retry the whole clean/deps/seed/build sequence, which
+        # test would otherwise retry the whole clean/seed/build sequence, which
         # turns one failure into one slow failure per test. On Oracle that took a
         # single broken model to 28 minutes.
         prepared_projects.add(cell_key)
         if dpos_project is not None:
-            # A deployed dbt project object is immutable, so `dbt clean` and `dbt deps`
-            # have nothing to act on. dpos_stage.py already ran deps while staging.
+            # A deployed dbt project object is immutable, so `dbt clean` has
+            # nothing to act on. dpos_stage.py already ran deps while staging.
             print(f"\n🧹 Preparing {database}: seed, build")
         else:
-            print(f"\n🧹 Preparing {project_dir.name}: clean, deps, seed, build")
+            print(f"\n🧹 Preparing {project_dir.name}: clean, seed, build")
             _run_dbt_command("dbt clean")
-            _run_dbt_command("dbt deps")
         _run_dbt_command("dbt seed --full-refresh")
         # Tolerate a failure here. Some models cannot build on every target, for
         # example the issue_105 custom-schema models on Oracle, where a schema is a
@@ -1080,9 +1079,6 @@ def dbt_runner(run_dbt):
 def reset_target(database: str, dbt_version: str):
     """
     Remove the target directory to force a full recompile.
-
-    Use this fixture instead of `dbt clean`. dbt clean also removes dbt_packages.
-    The session installs dbt_packages one time, and each later test needs it.
     """
 
     def _reset() -> None:
