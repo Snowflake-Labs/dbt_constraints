@@ -163,6 +163,18 @@
                 or node.resource_type == "seed" -%}
 
             {%- if is_rebuilt -%}
+                {#- Resolve the physical identifier, accounting for versioned models.
+                   dbt materialises a versioned model as `<name>_v<version>`, but
+                   node.alias / node.name may still be the unversioned form. Use the
+                   same resolution that constraint creation uses (lines 547-553). -#}
+                {%- set _rebuild_id = node.alias or node.name -%}
+                {%- if node.get('version') is not none -%}
+                    {%- if node.get('relation_name') -%}
+                        {%- set _rebuild_id = node.relation_name.split('.')[-1] | replace('"', '') -%}
+                    {%- elif not (_rebuild_id.endswith('_v' ~ node.version | string)) -%}
+                        {%- set _rebuild_id = _rebuild_id ~ '_v' ~ node.version -%}
+                    {%- endif -%}
+                {%- endif -%}
                 {#- Do not check if the table exists. The constraint lookups return
                    no rows for a table that does not exist. The first run does
                    nothing. -#}
@@ -170,7 +182,7 @@
                     api.Relation.create(
                         database=node.database,
                         schema=node.schema,
-                        identifier=node.alias or node.name) ) -%}
+                        identifier=_rebuild_id) ) -%}
             {%- endif -%}
         {%- endif -%}
     {%- endfor -%}
