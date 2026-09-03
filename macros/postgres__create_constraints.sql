@@ -291,3 +291,19 @@
     {{ postgres__drop_referential_constraints(relation) }}
     {{ return(adapter.dispatch('drop_relation', 'dbt')(relation)) }}
 {% endmacro %}
+
+{#- Release constraints before the build phase starts.
+
+    postgres__drop_relation above does the same work. It runs on the worker thread
+    that builds that model. A CASCADE drop of a constraint also locks each table
+    whose foreign key needs that constraint. Two threads can then take the same
+    locks in opposite order and deadlock.
+
+    on-run-start calls this macro one time, from a single session, before the
+    threads start. This removes the contention. The DDL and the set of dropped
+    constraints stay the same. Only the time and the session count change. -#}
+{% macro postgres__release_constraints_for_rebuild(rebuild_relations) -%}
+    {%- for relation in rebuild_relations -%}
+        {{ postgres__drop_referential_constraints(relation) }}
+    {%- endfor -%}
+{% endmacro %}

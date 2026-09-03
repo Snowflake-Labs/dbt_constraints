@@ -4,17 +4,21 @@
 
 ## Overview
 
-Modern pytest-based testing framework for `dbt_constraints` using Docker containers managed by `pytest-docker`.
+A pytest framework for `dbt_constraints`. Database servers run as Docker containers,
+managed by `pytest-docker`. The dbt client runs in one of two places, depending on the
+matrix cell: a cached uv venv on the host, or inside Snowflake through dbt Projects on
+Snowflake.
 
-This document provides technical details about the framework's internal architecture, design decisions, and implementation.
+This document provides technical details about the framework's internal architecture,
+design decisions, and implementation. `../AGENTS.md` is the shorter operating reference.
 
 ## Design Principles
 
-1. **Separation of Concerns**: Database containers separate from dbt runners
-2. **Efficiency**: Databases start once (session), runners per test (function)
+1. **Separation of Concerns**: Database containers separate from the dbt client
+2. **Efficiency**: Databases start once per session; each venv is cached between runs
 3. **Security**: Randomized credentials prevent hardcoded secrets
 4. **Flexibility**: Easy to add databases, versions, or tests
-5. **Standards**: Uses pytest conventions and pytest-docker plugin
+5. **Standards**: Uses pytest conventions and the pytest-docker plugin
 6. **Organization**: Clear folder structure for maintainability
 
 ## Directory Structure
@@ -22,22 +26,30 @@ This document provides technical details about the framework's internal architec
 ```
 automated_tests/
 ├── config/
-│   └── test-versions.json          # Version matrix
+│   └── test-versions.json          # Version matrix, single source of truth
 ├── docker/
-│   ├── build/
-│   │   ├── Dockerfile              # Multi-stage dbt runner
-│   │   └── run_dbt_tests.sh        # dbt workflow script
 │   └── compose/
-│       ├── *-db.yml                # Database services
-│       └── *-runner.yml            # dbt runner services
+│       └── *-db.yml                # Database services
+├── scripts/
+│   └── run_dbt_tests.sh            # Host-only dbt workflow script
 ├── tests/
 │   ├── test_dbt_versions.py        # Version matrix tests
 │   ├── test_constraints.py         # Feature tests
-│   └── test_issue_105.py           # Issue tests
-├── conftest.py                     # Pytest fixtures
+│   ├── test_source_constraints.py  # Constraints on sources, catalog-verified
+│   ├── test_fusion_compatibility.py
+│   ├── test_issue_105.py           # Issue tests
+│   └── test_issue_110.py
+├── .dpos-stage/                    # Generated. Deployable copies, gitignored
+├── conftest.py                     # Pytest fixtures and the runner dispatch
+├── dbt_venv.py                     # Per-cell uv virtual environments
+├── dpos_stage.py                   # Builds a deployable copy of a project
+├── dpos_runner.py                  # Translates dbt commands into snow CLI calls
 ├── pytest.ini                      # Pytest config
 └── requirements-test.txt           # Dependencies
 ```
+
+The runner containers are gone. `docker/build/`, `Dockerfile`, `Dockerfile.v2` and
+`*-runner.yml` no longer exist. `docker/` holds database services only.
 
 ## Architecture Diagram
 
@@ -61,21 +73,21 @@ automated_tests/
 │  ┌────────────────────────────────────────────┐  │
 │  │  Function Fixtures (per test)              │  │
 │  │                                            │  │
-│  │  Test: postgres-1.8.0                      │  │
+│  │  Test: postgres-1.8.10                     │  │
 │  │  ┌──────────────────────────┐              │  │
-│  │  │ dbt-postgres:1.8.0 runner│──connects──▶ │  │
+│  │  │ dbt-postgres:1.8.10 runne│──connects──▶ │  │
 │  │  │ (ephemeral container)    │      PG      │  │
 │  │  └──────────────────────────┘              │  │
 │  │                                            │  │
-│  │  Test: postgres-1.9.0                      │  │
+│  │  Test: postgres-1.11.14                    │  │
 │  │  ┌──────────────────────────┐              │  │
-│  │  │ dbt-postgres:1.9.0 runner│──connects──▶ │  │
+│  │  │ dbt-postgres:1.11.14 runn│──connects──▶ │  │
 │  │  │ (ephemeral container)    │      PG      │  │
 │  │  └──────────────────────────┘              │  │
 │  │                                            │  │
-│  │  Test: oracle-1.8.0                        │  │
+│  │  Test: oracle-1.8.10                       │  │
 │  │  ┌──────────────────────────┐              │  │
-│  │  │ dbt-oracle:1.8.0 runner  │──connects──▶ │  │
+│  │  │ dbt-oracle:1.8.10 runner │──connects──▶ │  │
 │  │  │ (ephemeral container)    │      ORA     │  │
 │  │  └──────────────────────────┘              │  │
 │  └────────────────────────────────────────────┘  │
@@ -109,7 +121,7 @@ automated_tests/
 
    ```bash
    docker compose build \
-     --build-arg DBT_VERSION=1.9.0 \
+     --build-arg DBT_VERSION=1.11.14 \
      -f docker/compose/postgres-runner.yml
    ```
 
@@ -144,11 +156,14 @@ automated_tests/
 │
 ├── docker/                     # Docker resources
 │   ├── build/                  # Container images
-│   │   └── Dockerfile          # dbt runner image
+│   │   ├── Dockerfile          # dbt 1.x runner image
+│   │   └── Dockerfile.v2       # dbt v2 runner image
 │   │
 │   └── compose/                # Service definitions
 │       ├── *-db.yml            # Database containers
-│       └── *-runner.yml        # dbt runners
+│       ├── fusion-runner.yml   # Fusion runner (Dockerfile.v2)
+│       ├── core2-runner.yml    # Core 2 runner (Dockerfile.v2)
+│       └── *-runner.yml        # dbt 1.x runners
 │
 ├── tests/                      # Test files
 │   ├── test_dbt_versions.py    # Matrix tests
@@ -207,7 +222,7 @@ python_functions = test_*
 | Fixture | Purpose | Returns |
 |---------|---------|---------|
 | `database` | Current DB under test | `"postgres"` (param) |
-| `dbt_version` | Current dbt version | `"1.9.0"` (param) |
+| `dbt_version` | Current dbt version | `"1.11.14"` (param) |
 | `runner_project_name` | Unique runner name | `"dbt-test-postgres-190"` |
 | `runner_compose_file` | Runner compose file | `"docker/compose/postgres-runner.yml"` |
 | `dbt_env` | Environment vars | `{"DBT_TARGET": "postgres", ...}` |
@@ -219,23 +234,23 @@ python_functions = test_*
 # 1. pytest_generate_tests hook reads config
 {
   "dbt_versions": {
-    "postgres": ["1.8.0", "1.9.0"],
-    "oracle": ["1.8.0"]
+    "postgres": ["1.8.10", "1.9.11"],
+    "oracle": ["1.8.10"]
   }
 }
 
 # 2. Creates parameter combinations
 [
-  ("postgres", "1.8.0"),
-  ("postgres", "1.9.0"),
-  ("oracle", "1.8.0")
+  ("postgres", "1.8.10"),
+  ("postgres", "1.9.11"),
+  ("oracle", "1.8.10")
 ]
 
 # 3. pytest.mark.parametrize injects into fixtures
 def test_dbt_workflow(database, dbt_version, run_dbt):
-    # database="postgres", dbt_version="1.8.0"
-    # database="postgres", dbt_version="1.9.0"
-    # database="oracle", dbt_version="1.8.0"
+    # database="postgres", dbt_version="1.8.10"
+    # database="postgres", dbt_version="1.9.11"
+    # database="oracle", dbt_version="1.8.10"
 ```
 
 ## Network Architecture
@@ -271,18 +286,83 @@ def test_dbt_workflow(database, dbt_version, run_dbt):
 Each test gets its own runner container:
 
 ```
-test_dbt_workflow[postgres-1.8.0]
-├── build: dbt-postgres:1.8.0
+test_dbt_workflow[postgres-1.8.10]
+├── build: dbt-postgres:1.8.10
 ├── run: dbt clean, deps, seed, build
 └── down: cleanup container
 
-test_dbt_workflow[postgres-1.9.0]
-├── build: dbt-postgres:1.9.0 (different image)
+test_dbt_workflow[postgres-1.9.11]
+├── build: dbt-postgres:1.9.11 (different image)
 ├── run: dbt clean, deps, seed, build
 └── down: cleanup container
 
 Database persists throughout ✓
 ```
+
+## dbt v2 Engines
+
+The matrix has two dbt v2 engines. They are different products. Do not confuse them.
+
+- **fusion** (package `dbt`): dbt Fusion. It is the Rust engine. It adds SQL comprehension, LSP features and `dbt lint` on top of dbt Core 2.0.
+- **core2** (package `dbt-core` 2.x): dbt Core 2.0. It is the Apache 2.0 licensed foundation behind Fusion. It does not include SQL comprehension, LSP or `dbt lint`.
+
+Both are single self-contained wheels. Neither needs an adapter package or dbt-adapters. Both run against Snowflake. Both parse the `integration_tests/dbt-fusion` project directory. Each installs into its own uv venv; see `dbt_venv.py`.
+
+conftest.py defines module constants that replace scattered `== "fusion"` comparisons:
+
+```python
+V2_ENGINE_TARGETS = ("fusion", "core2")
+DPOS_DATABASES = ("dpos_core", "dpos_fusion")
+FUSION_PROJECT_TARGETS = (*V2_ENGINE_TARGETS, "dpos_fusion")
+CLOUD_DATABASES = ("snowflake", *V2_ENGINE_TARGETS, *DPOS_DATABASES)
+```
+
+## In-database cells
+
+`dpos_core` and `dpos_fusion` run dbt inside Snowflake. `conftest.run_dbt` dispatches on
+the database key: a host cell shells out to the venv's `dbt`, and an in-database cell
+shells out to `snow dbt execute`. Both return a `subprocess.CompletedProcess`, so the
+assertions are identical.
+
+`dpos_stage.py` exists because Snowflake rejects `- local: ../../`. It copies the project
+and the repository root into `.dpos-stage/<cell>/`, rewrites `packages.yml`, and runs
+`dbt deps` so `dbt_packages/` ships inside the object. A staged `dbt_packages/` also
+removes the need for an external access integration.
+
+`dpos_runner.py` owns the command translation and the platform limits: unsupported
+commands (`clean`, `debug`), unsupported flags, and the session-context flags. See
+`../AGENTS.md` for the full rule list.
+
+## Snowflake Alignment
+
+The snowflake and dpos_* cells align with the versions dbt Projects on Snowflake (DPOS)
+supports.
+
+- The authoritative check is: `SELECT SYSTEM$SUPPORTED_DBT_VERSIONS();`
+- As of 2026-08-29 it returns dbt Core 1.9.4, 1.10.15, 1.11.11 and dbt Fusion
+  2.0.0-preview, 2.0.0-preview.175, 2.0.0-preview.186. DPOS pins exact patches.
+- 1.11.11 and 2.0.0-preview.186 now run IN Snowflake, as the `dpos_core` and
+  `dpos_fusion` cells. Running them on the host proved only that the version worked
+  locally.
+- The host keeps `snowflake` 1.5.12 as the backward-compatibility floor, `fusion`
+  2.0.0rc212 as the newest PyPI release, and `core2` 2.0.0b2. dbt Core 2.0 betas are not
+  a DPOS engine, so `core2` cannot move.
+- Reference doc: https://docs.snowflake.com/en/user-guide/data-engineering/dbt-projects-on-snowflake-dbt-core-versions
+- DPOS applies to the snowflake adapter only. postgres, oracle and sqlserver track dbt Labs releases. Adapter availability caps them: dbt-postgres tops out at 1.11.0 and dbt-sqlserver at 1.11.1. Neither can test 1.12.x. dbt-oracle reaches 1.12.0.
+
+## Known Gaps
+
+- Snowflake also supports dbt Fusion 2.0.0-preview.175. The PyPI `dbt` package rc series starts at rc178. preview.175 cannot be installed with uv, so it is not covered.
+- 2.0.0rc212 is the newest `dbt` release on PyPI. It matches the dbt Labs `stable` channel, not `latest`. CDN latest (preview.218) is not on PyPI. Channel source: https://public.cdn.getdbt.com/fs/versions.json
+- install.sh is gone. No `latest` or `stable` channel auto-tracking remains. Bump all pins manually.
+- An unpinned `uv pip install dbt` resolves to version 1.0.0.40.21, the old dbt Cloud CLI. It installs without error. Only `2.0.0rcNNN` releases of the `dbt` package are Fusion. Exact pins are mandatory.
+- The in-database cells stage their dependencies with the matching PyPI engine, then run
+  in Snowflake. `dpos_fusion` stages with `dbt==2.0.0rc186` and runs on
+  `2.0.0-preview.186`. The mapping is exact today. If the two ever resolve dependencies
+  differently, attach an external access integration and let Snowflake run `dbt deps`.
+- Most assertions read dbt stdout, not the catalog. `test_source_constraints.py` is the
+  one module that verifies constraints in `INFORMATION_SCHEMA`, through a dbt singular
+  test that runs in the warehouse.
 
 ## Adding New Components
 
@@ -320,7 +400,7 @@ Database persists throughout ✓
    ```json
    {
      "dbt_versions": {
-       "newdb": ["1.9.0"]
+       "newdb": ["1.11.14"]
      }
    }
    ```
@@ -332,7 +412,7 @@ Just update `config/test-versions.json`:
 ```json
 {
   "dbt_versions": {
-    "postgres": ["1.8.0", "1.9.0", "1.10.0"]
+    "postgres": ["1.8.10", "1.9.11", "1.11.14"]
   }
 }
 ```
@@ -410,34 +490,31 @@ healthcheck:
 
 **Note:** SQL Server uses `CMD-SHELL` to enable environment variable expansion (`$$SA_PASSWORD`).
 
-## Docker Build Optimization
+## Client Install Optimization
 
-### Multi-Stage Dockerfile
+Each matrix cell installs its dbt client into its own uv venv under `<repo>/.venvs/`.
+`dbt_venv.ensure_venv` writes a marker file recording the install spec and the Python
+version. A later run reuses the venv when the marker matches, so it pays no install cost.
 
-The dbt runner uses a **multi-stage build** for faster iteration:
-
-```dockerfile
-# Stage 1: Base image with common dependencies (cached)
-FROM python:3.11 as base
-RUN apt-get update && apt-get upgrade -y
-RUN apt-get install git build-essential libpq-dev unixodbc-dev
-RUN install ODBC Driver 18 for SQL Server
-# ... (rarely changes, cached)
-
-# Stage 2: Final image with version-specific dbt (rebuilt per version)
-FROM base as final
-ARG DBT_ADAPTER=postgres
-ARG DBT_VERSION=1.9.0
-RUN pip install dbt-core==${DBT_VERSION} dbt-${DBT_ADAPTER}==${DBT_VERSION}
-# ... (changes per test, but base is cached)
+```python
+# One venv per cell. Core pinned exactly; the adapter pinned to the matching MINOR,
+# because adapter patch numbers are independent of core patch numbers.
+["dbt-core==1.11.14", "dbt-postgres~=1.11.0"]
 ```
 
-**Benefits:**
+**Why a venv and not a runner container:**
 
-- 🚀 Base stage cached across all dbt versions
-- 🚀 Only final stage rebuilds when changing versions
-- 🚀 Significantly faster builds (seconds vs minutes)
-- 🚀 Reduced Docker layer downloads
+- A clean venv per cell cannot read a shadowed distribution. A shared Docker base layer
+  breaks dbt-core 1.5.x, because a newer `snowplow_tracker` module replaces the module
+  its pin needs while the metadata still reports the pin satisfied.
+- `target/` and the logs are readable on the host.
+- There is no `host.docker.internal` hop. The database containers publish host ports.
+
+**Cost:** `msodbcsql18` becomes a host prerequisite. `dbt_venv.sqlserver_driver_present`
+skips the sqlserver cells with a clear message when it is absent.
+
+The in-database cells build a venv only to run `dbt deps` while staging. Snowflake
+supplies the engine for the run itself.
 
 ## Testing Philosophy
 
@@ -488,13 +565,13 @@ RUN pip install dbt-core==${DBT_VERSION} dbt-${DBT_ADAPTER}==${DBT_VERSION}
 
 **Full Test Suite:**
 
-| Database   | Per Version | All Versions (2) |
+| Database   | Per Version | All Versions (3) |
 |-----------|-------------|------------------|
-| PostgreSQL | ~2 min     | ~4 min           |
-| SQL Server | ~3 min     | ~6 min           |
-| Oracle     | ~4 min     | ~8 min           |
+| PostgreSQL | ~2 min     | ~6 min           |
+| SQL Server | ~3 min     | ~9 min           |
+| Oracle     | ~4 min     | ~12 min          |
 
-**Total: ~18 minutes** (all databases, all versions)
+**Total:** The suite is now 18 cells, not 10. postgres, oracle and sqlserver run 3 versions each. snowflake runs 6. fusion runs 2. core2 runs 1. The previously measured per-version figures still apply per cell. Total runtime is higher than the previous 18-minute figure.
 
 **Fast Mode** (`--fast` flag):
 
@@ -506,12 +583,12 @@ RUN pip install dbt-core==${DBT_VERSION} dbt-${DBT_ADAPTER}==${DBT_VERSION}
 
 **Total: ~3 minutes** (validation only)
 
-### Why Function-Scoped Runners?
+### Why One Venv Per Cell?
 
-- **Isolation**: Each test gets clean dbt environment
-- **Version-specific**: Build args inject correct dbt version
-- **Fast cleanup**: No state leakage between tests
-- **Parallel-ready**: Can run tests in parallel with xdist
+- **Isolation**: no distribution shadowing between dbt versions
+- **Version-specific**: the install spec pins core exactly and the adapter to its minor
+- **Cached**: the venv survives between runs, so a repeat run installs nothing
+- **Host-readable**: `target/` and the logs need no container hop
 
 ## Framework Features
 
@@ -519,27 +596,33 @@ RUN pip install dbt-core==${DBT_VERSION} dbt-${DBT_ADAPTER}==${DBT_VERSION}
 |---------|----------------|
 | **Orchestration** | pytest-docker plugin |
 | **Database Lifecycle** | Session-scoped (shared) |
-| **Runner Lifecycle** | Function-scoped (isolated) |
+| **Host dbt Client** | One cached uv venv per cell |
+| **In-database dbt Client** | Snowflake, via `snow dbt execute` |
 | **Test Discovery** | Automatic via pytest |
-| **Parallel Support** | pytest-xdist compatible |
 | **Fast Mode** | `--fast` flag |
-| **Security** | Randomized credentials |
-| **Build Optimization** | Multi-stage Docker |
+| **Security** | Randomized credentials for the local databases |
+
+**Parallel execution:** the local database cells tolerate `pytest-xdist`. The Snowflake
+cells do not, and never did. All host Snowflake cells share one schema
+(`dbt_constraints_test`) with no run-scoped suffix, and Snowflake permits only one
+concurrent `EXECUTE DBT PROJECT` per object. The in-database cells each hold their own
+object and their own schema, so `dpos_core` and `dpos_fusion` can run at the same time as
+each other and as the host cells.
 
 ## Benefits
 
-1. **Standards-Based**: Uses pytest idioms, pytest-docker plugin
-2. **Efficient**: Databases start once, runners are ephemeral
-3. **Secure**: Randomized credentials for every test session
-4. **Optimized**: Multi-stage Docker builds cache common dependencies
+1. **Standards-Based**: Uses pytest idioms and the pytest-docker plugin
+2. **Efficient**: Databases start once; venvs are cached between runs
+3. **Secure**: Randomized credentials for every local database session
+4. **Faithful**: The versions Snowflake runs are tested inside Snowflake
 5. **Organized**: Clear folder structure
 6. **Maintainable**: Easy to understand and modify
 7. **Extensible**: Simple to add databases/versions/tests
 8. **Fast**: Session-scoped DBs save 6+ minutes per run
-9. **Flexible**: CLI filters, markers, parallel execution
-10. **Documented**: Separate user and developer documentation
+9. **Flexible**: CLI filters and markers
+10. **Documented**: `../AGENTS.md` for operating rules, this file for internals
 
 ---
 
-**Last Updated**: 2025-11-26
+**Last Updated**: 2026-08-29
 **Framework Version**: 1.0 (Initial Release)

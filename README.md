@@ -1,6 +1,6 @@
 # dbt Constraints Package
 
-This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, Oracle, Redshift, and Vertica only.
+This package generates database constraints based on the tests in a dbt project. It is currently compatible with Snowflake, PostgreSQL, Oracle, Redshift, BigQuery, and Vertica only.
 
 ## How the dbt Constraints Package differs from dbt's Model Contracts feature
 
@@ -23,6 +23,15 @@ When you add this package, dbt will automatically begin to create __unique keys_
 ### Disabling automatic constraint generation
 
 The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation. By default dbt Constraints only creates constraints on models. To allow constraints on sources, you can set `dbt_constraints_sources_enabled` to `true`. The package will verify that you have sufficient database privileges to create constraints on sources.
+
+> **Bug fix: `dbt_constraints_sources_enabled` now takes effect.**
+> Earlier releases did not create constraints on sources. The package looked up test
+> dependencies in `graph.nodes`, but dbt holds sources in `graph.sources`, so every
+> source dependency resolved to nothing and no DDL was issued.
+> If you already set `dbt_constraints_sources_enabled: true`, the package starts
+> creating constraints on your source tables after you upgrade. Confirm that the dbt
+> role should alter those tables. Set `dbt_constraints_sources_enabled: false` to
+> turn source constraints off.
 
 ```yml
 vars:
@@ -86,13 +95,16 @@ packages:
     tests:
       # Single column constraints
       - dbt_constraints.primary_key:
-          column_name: OL_PK
+          arguments:
+            column_name: OL_PK
       - dbt_constraints.unique_key:
-          column_name: OL_ORDERKEY
+          arguments:
+            column_name: OL_ORDERKEY
       - dbt_constraints.foreign_key:
-          fk_column_name: OL_CUSTKEY
-          pk_table_name: ref('DIM_CUSTOMERS')
-          pk_column_name: C_CUSTKEY
+          arguments:
+            fk_column_name: OL_CUSTKEY
+            pk_table_name: ref('DIM_CUSTOMERS')
+            pk_column_name: C_CUSTKEY
       # Multiple column constraints
       - dbt_constraints.primary_key:
           arguments:
@@ -100,7 +112,7 @@ packages:
               - OL_PK_COLUMN_1
               - OL_PK_COLUMN_2
       - dbt_constraints.unique_key:
-          arguments
+          arguments:
             column_names:
               - OL_UK_COLUMN_1
               - OL_UK_COLUMN_2
@@ -115,22 +127,40 @@ packages:
               - C_PK_COLUMN_2
 ```
 
+### Test argument syntax
+
+The examples above nest test arguments under an `arguments:` property. dbt-core
+added that property in 1.10.5. dbt-core 1.11 and later, dbt 2.x, and dbt Fusion
+all expect it, and they raise a deprecation warning for arguments that sit
+directly under the test name.
+
+The package also accepts the older form, where arguments sit directly under the
+test name. Use that form with dbt-core versions before 1.10.5:
+
+```yml
+    tests:
+      - dbt_constraints.primary_key:
+          column_name: OL_PK
+```
+
 ### Dependencies and Requirements
 
-* The package's macros depend on the results and graph object schemas of dbt >=1.0.0
+* The package's macros depend on the results and graph object schemas of dbt >=1.0.0. The `arguments:` test syntax in the examples above needs dbt-core >=1.10.5. Older versions of dbt-core need the older test syntax.
 
-* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, and Oracle. To add support for other databases, it is necessary to implement the following seven macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
+* The package currently only includes macros for creating constraints in Snowflake, PostgreSQL, Oracle, Redshift, BigQuery, and Vertica. To add support for other databases, it is necessary to implement the following eight macros with the appropriate DDL & SQL for your database. Pull requests to contribute support for other databases are welcome. See the <ADAPTER_NAME>__create_constraints.sql files as examples.
 
 ```sql
-<ADAPTER_NAME>__create_primary_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
-<ADAPTER_NAME>__create_unique_key(table_model, column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
-<ADAPTER_NAME>__create_foreign_key(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false, constraint_name=none, lookup_cache=none)
-<ADAPTER_NAME>__create_not_null(pk_model, pk_column_names, fk_model, fk_column_names, verify_permissions, quote_columns=false, lookup_cache=none)
-<ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names, lookup_cache=none)
-<ADAPTER_NAME>__foreign_key_exists(table_relation, column_names, lookup_cache=none)
-<ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions, lookup_cache=none)
-<ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions, lookup_cache=none)
+<ADAPTER_NAME>__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause)
+<ADAPTER_NAME>__create_unique_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause)
+<ADAPTER_NAME>__create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause)
+<ADAPTER_NAME>__create_not_null(table_relation, column_names, verify_permissions, quote_columns, lookup_cache, rely_clause)
+<ADAPTER_NAME>__unique_constraint_exists(table_relation, column_names, lookup_cache)
+<ADAPTER_NAME>__foreign_key_exists(table_relation, column_names, lookup_cache)
+<ADAPTER_NAME>__have_references_priv(table_relation, verify_permissions, lookup_cache)
+<ADAPTER_NAME>__have_ownership_priv(table_relation, verify_permissions, lookup_cache)
 ```
+
+* One more macro is optional. A database that enforces constraints can deadlock when threads run DDL on tables that a foreign key joins. Implement `<ADAPTER_NAME>__release_constraints_for_rebuild(rebuild_relations)` to drop those constraints in one session before the build starts. The default implementation does nothing, so a database that does not enforce constraints needs no change. The postgres and oracle macros are examples. Users can set `dbt_constraints_release_before_build` to false to drop the constraints during the build instead.
 
 ## RELY and NORELY Properties
 
@@ -165,15 +195,19 @@ __[Caveat Emptor](https://en.wikipedia.org/wiki/Caveat_emptor):__
 * You will get an error if you try to force constraints to be generated that are enforced by your database. On Snowflake that is only a not_null constraint but on databases like Oracle, all the generated constraints are enforced. This is why, at present, only the Snowflake macros implement this feature.
 * This feature can still cause unexpected query results on Snowflake due to [join elimination](https://docs.snowflake.com/en/user-guide/join-elimination). Although executing tests on Snowflake will correctly set the `RELY` or `NORELY` property based on whether the tests pass and fail, activating this feature and **skipping the execution of tests** will not cause a `RELY` constraint to become a `NORELY` constraint. A `RELY` constraint only becomes a `NORELY` constraint **if a test is executed** and has failures. If you create a `RELY` constraint by running `dbt build` and subsequently only execute `dbt run` without eventually following up with `dbt test`, you could have constraints that still have the `RELY` property but now have referential integrity issues. Snowflake users are encouraged to frequently or always execute their tests so that the `RELY` property is kept up to date.
 
-These are examples from a dbt_project.yml using the feature in models or tests:
+These are examples from a dbt_project.yml using the feature in models or tests.
+Set the property inside a `+meta:` block. dbt Fusion reads this property from
+`meta` only. dbt-core reads it from either place:
 
 ```yml
 models:
   your_project_name:
-    +always_create_constraint: true
+    +meta:
+      always_create_constraint: true
 tests:
   your_project_name:
-    +always_create_constraint: true
+    +meta:
+      always_create_constraint: true
 ```
 
 This is an example from a model schema.yml using the feature. Setting the property in the `config:` section of a test does not work so you should set it in the model's `config:` section.
