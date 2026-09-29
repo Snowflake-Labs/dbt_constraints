@@ -106,6 +106,126 @@
 
 
 
+{#- Return the relations that this run drops or replaces.
+
+   Databases that enforce constraints deadlock when threads run DDL on tables that
+   a foreign key joins. A CASCADE drop of a constraint also locks each table whose
+   foreign key needs that constraint. Two threads can then take the same locks in
+   opposite order.
+
+   A foreign key in test YAML does not add an edge between the two models. It only
+   makes the test depend on both models. The two tables have no relative build
+   order. dbt can build them at the same time.
+
+   To prevent the deadlock, release these constraints one time before the build.
+   The single on-run-start session does this. This macro returns the relations to
+   release. This macro has no side effects. Each call gives the same result. -#}
+
+{%- macro relations_to_rebuild() -%}
+    {%- set rebuild_relations = [] -%}
+
+    {%- if not execute -%}
+        {{ return(rebuild_relations) }}
+    {%- endif -%}
+
+    {%- for node_id in selected_resources -%}
+        {#- graph.nodes uses unique_id as the key. graph.sources holds the sources.
+           dbt does not build sources. This lookup correctly omits them. -#}
+        {%- set node = graph.nodes.get(node_id) -%}
+
+        {%- if node and node.config and node.resource_type in ("model", "seed") -%}
+            {%- set materialized = node.config.get("materialized", "") | string | lower -%}
+
+            {#- A node can set full refresh on or off. This overrides the run flag. -#}
+            {%- set node_full_refresh = node.config.get("full_refresh", none) -%}
+            {%- if node_full_refresh is none -%}
+                {%- set is_full_refresh = flags.FULL_REFRESH -%}
+            {%- else -%}
+                {%- set is_full_refresh = node_full_refresh | string | lower == "true" -%}
+            {%- endif -%}
+
+            {#- table:            dbt always replaces it, so the constraints always go.
+               incremental:      dbt replaces it only for a full refresh.
+               materialized_view: same as incremental.
+               view:             the package does not create constraints on views.
+               ephemeral:        no relation exists.
+               seed:             always. A full refresh drops and recreates it. Any
+                                 other run TRUNCATES it, and a truncate needs the
+                                 constraints gone just as much as a drop does. Leaving
+                                 seeds out left six of them truncating in parallel,
+                                 which deadlocked on Oracle with ORA-00060.
+               snapshot:         dbt never replaces it. -#}
+            {%- set is_rebuilt =
+                ( node.resource_type == "model"
+                  and ( materialized == "table"
+                        or ( materialized in ("incremental", "materialized_view")
+                             and is_full_refresh ) ) )
+                or node.resource_type == "seed" -%}
+
+            {%- if is_rebuilt -%}
+                {#- Resolve the physical identifier, accounting for versioned models.
+                   dbt materialises a versioned model as `<name>_v<version>`, but
+                   node.alias / node.name may still be the unversioned form. Use the
+                   same resolution that constraint creation uses (lines 547-553). -#}
+                {%- set _rebuild_id = node.alias or node.name -%}
+                {%- if node.get('version') is not none -%}
+                    {%- if node.get('relation_name') -%}
+                        {%- set _rebuild_id = node.relation_name.split('.')[-1] | replace('"', '') -%}
+                    {%- elif not (_rebuild_id.endswith('_v' ~ node.version | string)) -%}
+                        {%- set _rebuild_id = _rebuild_id ~ '_v' ~ node.version -%}
+                    {%- endif -%}
+                {%- endif -%}
+                {#- Do not check if the table exists. The constraint lookups return
+                   no rows for a table that does not exist. The first run does
+                   nothing. -#}
+                {%- do rebuild_relations.append(
+                    api.Relation.create(
+                        database=node.database,
+                        schema=node.schema,
+                        identifier=_rebuild_id) ) -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+
+    {{ return(rebuild_relations) }}
+{%- endmacro -%}
+
+
+
+{#- Release the constraints on each relation that this run drops or replaces.
+
+   Add this macro to on-run-start. It runs the same DDL as the drop_relation
+   override, through the same adapter macro. It runs one time, from a single
+   session, before the worker threads start. This removes the lock contention.
+
+   Each adapter must implement release_constraints_for_rebuild to use this macro.
+   The default macro does nothing. Databases that do not enforce constraints stay
+   unchanged. -#}
+
+{%- macro release_constraints_for_rebuild() -%}
+    {%- if execute
+        and var('dbt_constraints_enabled', "false")|string|lower == "true"
+        and var('dbt_constraints_release_before_build', "true")|string|lower == "true" -%}
+
+        {%- set rebuild_relations = dbt_constraints.relations_to_rebuild() -%}
+
+        {%- if rebuild_relations | length > 0 -%}
+            {%- do log("dbt Constraints: releasing constraints on "
+                ~ (rebuild_relations | length)
+                ~ " relation(s) that this run will drop or replace", info=true) -%}
+            {%- do adapter.dispatch('release_constraints_for_rebuild', 'dbt_constraints')(rebuild_relations) -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endmacro -%}
+
+{#- Databases that do not enforce constraints take no locks that matter. They have
+   no constraints to release. Snowflake, BigQuery and Redshift use this macro. -#}
+{%- macro default__release_constraints_for_rebuild(rebuild_relations) -%}
+{%- endmacro -%}
+
+
+
+
 {#- Override dbt's truncate_relation macro to allow us to create adapter specific versions that drop constraints -#}
 
 {% macro truncate_relation(relation) -%}
@@ -175,7 +295,8 @@
 
 
 {#- This macro checks if a test or its model is selected -#}
-{%- macro test_selected(test_model) -%}
+{#- The fk_dependency_dict argument is optional. It prevents a full loop in each call. -#}
+{%- macro test_selected(test_model, fk_dependency_dict=[]) -%}
 
     {%- if test_model.unique_id in selected_resources -%}
         {{ return("TEST_SELECTED") }}
@@ -185,7 +306,8 @@
     {%- endif -%}
 
     {#- Check if a PK/UK should be created because it is referenced by a selected FK -#}
-    {%- if test_model.test_metadata.name in ("primary_key", "unique_key", "unique_combination_of_columns", "unique") -%}
+    {%- if test_model.test_metadata.name in ("primary_key", "unique_key", "unique_combination_of_columns", "unique")
+            and fk_dependency_dict | length > 0 -%}
         {#- Handle both dbt-core kwargs and Fusion arguments format -#}
         {%- set raw_pk_kwargs = test_model.test_metadata.kwargs -%}
         {%- if raw_pk_kwargs.arguments is defined -%}
@@ -207,37 +329,37 @@
         {%- elif pk_test_args.column_name -%}
             {%- set pk_test_columns =  [pk_test_args.column_name] -%}
         {%- endif -%}
-        {%- for fk_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
-                if  fk_model.test_metadata
-                and fk_model.test_metadata.name in ("foreign_key", "relationships")
-                and test_model.attached_node in fk_model.depends_on.nodes
-                and ( (fk_model.unique_id and fk_model.unique_id in selected_resources)
-                    or (fk_model.attached_node and fk_model.attached_node in selected_resources) ) -%}
-            {#- Handle both dbt-core kwargs and Fusion arguments format -#}
-            {%- set raw_fk_kwargs = fk_model.test_metadata.kwargs -%}
-            {%- if raw_fk_kwargs.arguments is defined -%}
-                {%- set fk_test_args = {} -%}
-                {%- for key, value in raw_fk_kwargs.items() -%}
-                    {%- if key != 'arguments' -%}
-                        {%- do fk_test_args.update({key: value}) -%}
-                    {%- endif -%}
-                {%- endfor -%}
-                {%- do fk_test_args.update(raw_fk_kwargs.arguments) -%}
-            {%- else -%}
-                {%- set fk_test_args = raw_fk_kwargs -%}
-            {%- endif -%}
-            {%- set fk_test_columns = [] -%}
-            {%- if fk_test_args.pk_column_names -%}
-                {%- set fk_test_columns =  fk_test_args.pk_column_names -%}
-            {%- elif fk_test_args.pk_column_name -%}
-                {%- set fk_test_columns =  [fk_test_args.pk_column_name] -%}
-            {%- elif fk_test_args.field -%}
-                {%- set fk_test_columns =  [fk_test_args.field] -%}
-            {%- endif -%}
-            {%- if column_list_matches(pk_test_columns, fk_test_columns) -%}
-                {{ return("PK_UK_FOR_SELECTED_FK") }}
-            {%- endif -%}
-        {%- endfor -%}
+        {%- if test_model.attached_node in fk_dependency_dict -%}
+            {%- for fk_model in fk_dependency_dict[test_model.attached_node]
+                    if (fk_model.unique_id and fk_model.unique_id in selected_resources)
+                    or (fk_model.attached_node and fk_model.attached_node in selected_resources) -%}
+                {#- Handle both dbt-core kwargs and Fusion arguments format -#}
+                {%- set raw_fk_kwargs = fk_model.test_metadata.kwargs -%}
+                {%- if raw_fk_kwargs.arguments is defined -%}
+                    {%- set fk_test_args = {} -%}
+                    {%- for key, value in raw_fk_kwargs.items() -%}
+                        {%- if key != 'arguments' -%}
+                            {%- do fk_test_args.update({key: value}) -%}
+                        {%- endif -%}
+                    {%- endfor -%}
+                    {%- do fk_test_args.update(raw_fk_kwargs.arguments) -%}
+                {%- else -%}
+                    {%- set fk_test_args = raw_fk_kwargs -%}
+                {%- endif -%}
+                {%- set fk_test_columns = [] -%}
+                {%- if fk_test_args.pk_column_names -%}
+                    {%- set fk_test_columns =  fk_test_args.pk_column_names -%}
+                {%- elif fk_test_args.pk_column_name -%}
+                    {%- set fk_test_columns =  [fk_test_args.pk_column_name] -%}
+                {%- elif fk_test_args.field -%}
+                    {%- set fk_test_columns =  [fk_test_args.field] -%}
+                {%- endif -%}
+                {%- if column_list_matches(pk_test_columns, fk_test_columns) -%}
+                    {{ return("PK_UK_FOR_SELECTED_FK") }}
+                {%- endif -%}
+
+            {%- endfor -%}
+        {%- endif -%}
     {%- endif -%}
 
     {{ return(none) }}
@@ -278,14 +400,36 @@
         {{ return(true) }}
     {%- endif -%}
     {%- for table_node in test_model.depends_on.nodes -%}
-        {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-            if node.config.get("always_create_constraint", "false")|string|lower == "true"
-            or node.config.get("meta", {}).get("always_create_constraint", "false")|string|lower == "true" -%}
+        {#- graph.nodes uses unique_id as the key. Read the node directly.
+           graph.sources holds the sources. Read graph.sources if the node is absent. -#}
+        {%- set node = graph.nodes.get(table_node) or graph.sources.get(table_node) -%}
+        {%- if node and node.config
+            and ( node.config.get("always_create_constraint", "false")|string|lower == "true"
+            or node.config.get("meta", {}).get("always_create_constraint", "false")|string|lower == "true" ) -%}
             {{ return(true) }}
-        {%- endfor -%}
+        {%- endif -%}
     {%- endfor -%}
 
     {{ return(false) }}
+{%- endmacro -%}
+
+
+{#- Return the type of object that a node builds.
+   A custom materialization declares the type that it builds with meta.materialized.
+   Read meta.materialized first. Read config.materialized second.
+   Return "other" if the node sets neither property.
+   Do not give meta.materialized a literal default value. A literal default makes
+   every comparison true, because most nodes do not set meta.materialized.
+
+   Do not put the text "materialization" in this macro name. dbt 1.5 treats any
+   macro whose name holds that text as a materialization macro. It then demands a
+   supported_languages argument and fails the parse. dbt 1.11 and later test the
+   block type instead, but this package still supports the older versions. -#}
+{%- macro effective_materialized(node) -%}
+    {%- if node and node.config -%}
+        {{ return(node.config.get("meta", {}).get("materialized", node.config.get("materialized", "other"))) }}
+    {%- endif -%}
+    {{ return("other") }}
 {%- endmacro -%}
 
 
@@ -300,16 +444,41 @@
     {%- set dbt_constraints_sources_nn_enabled = var('dbt_constraints_sources_nn_enabled', "false")|string|lower == "true" %}
     {%- set dbt_constraints_always_norely = var('dbt_constraints_always_norely', "false")|string|lower == "true" %}
 
-    {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests -#}
+    {%- set pk_uk_test_list = [] -%}
+
+    {# Build a dictionary of foreign key and relationship tests for test_selected.
+       This prevents a full loop in each call. #}
+    {%- set fk_dependency_dict = {} -%}
+    {% if "primary_key" in constraint_types or "unique_key" in constraint_types or "unique_combination_of_columns" in constraint_types or "unique" in constraint_types %}
+        {%- for fk_test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
+                if  fk_test_model.test_metadata
+                and fk_test_model.test_metadata.name in ("foreign_key", "relationships") -%}
+            {%- for fk_node in fk_test_model.depends_on.nodes -%}
+                {%- if fk_node not in fk_dependency_dict -%}
+                    {%- do fk_dependency_dict.update({fk_node: []}) -%}
+                {%- endif -%}
+                {%- do fk_dependency_dict[fk_node].append(fk_test_model) -%}
+            {%- endfor -%}
+        {%- endfor -%}
+    {%- endif -%}
+
+
+    {#- Loop through the metadata and find all tests that match the constraint_types and have all the fields we check for tests.
+       A test declared on a source has no attached_node. Accept such a test when it
+       depends on exactly one node. That node is the source. A generic test on a
+       model always sets attached_node. The test_metadata checks exclude singular
+       tests. This check follows the depends_on checks, because the filter on
+       `nodes` needs `nodes` to exist. -#}
     {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
             if test_model.test_metadata
             and test_model.test_metadata.kwargs
             and test_model.test_metadata.name
             and test_model.test_metadata.name is in( constraint_types )
             and test_model.unique_id
-            and test_model.attached_node
             and test_model.depends_on
             and test_model.depends_on.nodes
+            and ( test_model.attached_node
+                or (test_model.depends_on.nodes | length) == 1 )
             and test_model.config
             and test_model.config.enabled
             and ( test_model.config.get("dbt_constraints_enabled", "true")|string|lower == "true"
@@ -330,7 +499,8 @@
             {%- set test_parameters = raw_kwargs -%}
         {%- endif -%}
         {%- set test_name = test_model.test_metadata.name -%}
-        {%- set selected = dbt_constraints.test_selected(test_model) -%}
+        {# Pass the dictionary of foreign key and relationship tests to test_selected. #}
+        {%- set selected = dbt_constraints.test_selected(test_model, fk_dependency_dict) -%}
 
         {#- We can shortcut additional tests if the constraint was not selected -#}
         {%- if selected is not none and dbt_constraints_always_norely -%}
@@ -363,10 +533,14 @@
 
             {#- Find the table models that are referenced by this test. -#}
             {%- for table_node in test_model.depends_on.nodes -%}
-                {%- for node in graph.nodes.values() | selectattr("unique_id", "equalto", table_node)
-                    if node.config
-                    and ( node.config.get("materialized", "other") not in ("view", "ephemeral", "dynamic_table")
-                        or node.config.get("meta", {}).get("materialized", "other") not in ("view", "ephemeral", "dynamic_table") )
+                {#- graph.nodes uses unique_id as the key. Read the node directly.
+                   graph.sources holds the sources. Read graph.sources if the node
+                   is absent. -#}
+                {%- set node = graph.nodes.get(table_node) or graph.sources.get(table_node) -%}
+                {#- Read the effective materialization. A custom materialization declares
+                   the type of object it builds with meta.materialized. -#}
+                {%- if node and node.config
+                    and dbt_constraints.effective_materialized(node) not in ("view", "ephemeral", "dynamic_table")
                     and ( node.resource_type in ("model", "snapshot", "seed")
                         or ( node.resource_type == "source" and dbt_constraints_sources_enabled
                             and ( ( dbt_constraints_sources_pk_enabled and test_name in("primary_key") )
@@ -379,8 +553,10 @@
                        For versioned models dbt materialises the table as `<name>_v<version>`,
                        but `node.alias`/`node.name` may still be the unversioned form.
                        Prefer `node.relation_name` (e.g. `"DB"."SCH"."MY_MODEL_V1"`) when set;
-                       otherwise append `_v<version>` if not already present. -#}
-                    {%- set _node_alias = node.alias or node.name -%}
+                       otherwise append `_v<version>` if not already present.
+                       A source has no `alias`. A source holds the physical table
+                       name in `identifier`. Read `identifier` before `name`. -#}
+                    {%- set _node_alias = node.alias or node.identifier or node.name -%}
                     {%- if node.get('version') is not none -%}
                         {%- if node.get('relation_name') -%}
                             {%- set _node_alias = node.relation_name.split('.')[-1] | replace('"', '') -%}
@@ -392,13 +568,12 @@
                     {#- Append to our list of models for this test -#}
                     {%- do table_models.append(node) -%}
                     {%- if node.resource_type == "source"
-                        or node.config.get("materialized", "other") not in ("table", "incremental", "snapshot", "seed")
-                        or node.config.get("meta", {}).get("materialized", "other") not in ("table", "incremental", "snapshot", "seed") -%}
+                        or dbt_constraints.effective_materialized(node) not in ("table", "incremental", "snapshot", "seed") -%}
                         {#- If we are using a sources or custom materializations, we will need to verify permissions -#}
                         {%- set ns.verify_permissions = true -%}
                     {%- endif -%}
 
-                {% endfor %}
+                {% endif %}
             {% endfor %}
 
             {#- We only create PK/UK if there is one model referenced by the test

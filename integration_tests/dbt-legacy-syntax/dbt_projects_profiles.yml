@@ -1,0 +1,29 @@
+# Profile for dbt Projects on Snowflake.
+#
+# dbt Projects on Snowflake reads this file and ignores profiles.yml when both are
+# present. Standard dbt does the opposite: it reads only profiles.yml and never looks at
+# this name. The two files therefore coexist. The local test cells keep using
+# profiles.yml with no change, and the in-database cells use this file.
+#
+# There are no credentials here. The project runs under the Snowflake session that calls
+# EXECUTE DBT PROJECT, so account, user, password, and key fields are absent. dbt still
+# requires account and user keys, so both hold a placeholder.
+#
+# Every value comes from env.yml in this directory. See env.yml for the schema this cell
+# writes to.
+
+dbt_constraints:
+  target: snowflake
+  outputs:
+    snowflake:
+      type: snowflake
+      account: "not needed"
+      user: "not needed"
+      role: "{{ env_var('DBT_CURRENT_ROLE') }}"
+      database: "{{ env_var('DBT_CURRENT_DB') }}"
+      warehouse: "{{ env_var('DBT_CURRENT_WH') }}"
+      schema: "{{ env_var('DBT_CURRENT_SCHEMA') }}"
+      # This suite tests constraint DDL under concurrency. 64 threads is deliberate:
+      # it is the setting that exposed the FK deadlocks the package now guards against.
+      # Snowflake's general guidance of 8 threads does not apply to this project.
+      threads: 64

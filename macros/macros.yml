@@ -9,7 +9,7 @@ macros:
         type: list[string]
         description: Accepts a list of tests to consider for constraint creation and whether columns should be quoted. By default it will create all the constraint types. Valid values are ['primary_key', 'unique_key', 'unique_combination_of_columns', 'unique', 'foreign_key', 'relationships']
       - name: quote_columns
-        type: boolean
+        type: bool
         description: Whether to wrap column names in double quotes. By default this is set to false.
     docs:
       show: true
@@ -25,12 +25,21 @@ macros:
       - name: column_names
         type: list[string]
         description: An array of text column names to include in the constraint
+      - name: verify_permissions
+        type: bool
+        description: Whether to check that dbt can change the table before it creates the constraint.
       - name: quote_columns
-        type: boolean
+        type: bool
         description: Whether to wrap column names in double quotes. By default this is set to false.
       - name: constraint_name
         type: string
         description: Name of the constraint.  If not specified, a constraint name will be generated.
+      - name: lookup_cache
+        type: dict[string, any]
+        description: A cache of existing constraints and privileges. The cache reduces the number of database queries.
+      - name: rely_clause
+        type: string
+        description: Text added after the constraint. Snowflake accepts RELY or NORELY.
     docs:
       show: true
 
@@ -43,12 +52,21 @@ macros:
       - name: column_names
         type: list[string]
         description: An array of text column names to include in the constraint
+      - name: verify_permissions
+        type: bool
+        description: Whether to check that dbt can change the table before it creates the constraint.
       - name: quote_columns
-        type: boolean
+        type: bool
         description: Whether to wrap column names in double quotes. By default this is set to false.
       - name: constraint_name
         type: string
         description: Name of the constraint.  If not specified, a constraint name will be generated.
+      - name: lookup_cache
+        type: dict[string, any]
+        description: A cache of existing constraints and privileges. The cache reduces the number of database queries.
+      - name: rely_clause
+        type: string
+        description: Text added after the constraint. Snowflake accepts RELY or NORELY.
     docs:
       show: true
 
@@ -67,12 +85,21 @@ macros:
       - name: fk_column_names
         type: list[string]
         description: An array of text column names to include in the constraint
+      - name: verify_permissions
+        type: bool
+        description: Whether to check that dbt can change the table before it creates the constraint.
       - name: quote_columns
-        type: boolean
+        type: bool
         description: Whether to wrap column names in double quotes. By default this is set to false.
       - name: constraint_name
         type: string
         description: Name of the constraint.  If not specified, a constraint name will be generated.
+      - name: lookup_cache
+        type: dict[string, any]
+        description: A cache of existing constraints and privileges. The cache reduces the number of database queries.
+      - name: rely_clause
+        type: string
+        description: Text added after the constraint. Snowflake accepts RELY or NORELY.
     docs:
       show: true
 
@@ -85,6 +112,9 @@ macros:
       - name: column_names
         type: list[string]
         description: An array of text column names the constraint must contain
+      - name: lookup_cache
+        type: dict[string, any]
+        description: A cache of existing constraints and privileges. The cache reduces the number of database queries.
     docs:
       show: true
 
@@ -97,5 +127,8 @@ macros:
       - name: column_names
         type: list[string]
         description: An array of text column names the constraint must contain
+      - name: lookup_cache
+        type: dict[string, any]
+        description: A cache of existing constraints and privileges. The cache reduces the number of database queries.
     docs:
       show: true

@@ -1,115 +1,126 @@
 # Integration Tests
 
-This directory contains integration tests for the `dbt_constraints` package, split into two separate dbt projects to support both dbt-core and dbt Fusion.
+This directory holds the integration tests for `dbt_constraints`.
+The tests use two separate dbt projects.
+The test harness picks a project by dbt version.
 
 ## Directory Structure
 
 ```
 integration_tests/
-├── dbt-core/              # dbt-core (v1.x) project
-│   ├── data/              # Seed data
-│   ├── models/            # Test models
-│   ├── macros/            # Test macros
-│   ├── dbt_project.yml    # dbt-core compatible config
-│   ├── packages.yml       # Package dependencies
-│   └── profiles.yml       # Connection profiles
-├── dbt-fusion/            # dbt Fusion (v2.x) project
-│   ├── data/              # Seed data (with arguments: wrapper)
-│   ├── models/            # Test models (with arguments: wrapper)
-│   ├── macros/            # Test macros
-│   ├── dbt_project.yml    # Fusion compatible config
-│   ├── packages.yml       # Package dependencies
-│   └── profiles.yml       # Connection profiles
-├── automated_tests/       # Pytest-based automation
-│   ├── tests/             # Test files
-│   ├── conftest.py        # Test configuration
-│   └── docker/            # Docker infrastructure
-├── .env                   # Snowflake credentials (not in git)
-└── .dockerenv/            # Docker-specific profiles
+├── dbt-legacy-syntax/        # For dbt-core before 1.10.5
+│   ├── data/                 # Seed data and seed tests
+│   ├── models/               # Test models and schema.yml
+│   ├── macros/               # Test macros
+│   ├── dbt_project.yml       # Project config
+│   ├── packages.yml          # Package dependencies
+│   └── profiles.yml          # Connection profiles
+├── dbt-current-syntax/       # For dbt-core 1.10.5 and later
+│   ├── data/                 # Seed data and seed tests
+│   ├── models/               # Test models and schema.yml
+│   ├── macros/               # Test macros
+│   ├── dbt_project.yml       # Project config
+│   ├── packages.yml          # Package dependencies
+│   └── profiles.yml          # Connection profiles
+├── automated_tests/          # Pytest-based automation
+│   ├── tests/                # Test files
+│   ├── conftest.py           # Test configuration
+│   ├── config/               # dbt version matrix
+│   └── docker/               # Docker infrastructure
+├── .env                      # Snowflake credentials (not in git)
+└── .dockerenv/               # Docker-specific profiles
 ```
 
-## Why Two Projects?
+Each project has its own README.
+Read `dbt-legacy-syntax/README.md` and `dbt-current-syntax/README.md` for the full detail.
 
-dbt Fusion (v2.x) enforces stricter YAML formatting than dbt-core (v1.x):
+## Why Two Projects
 
-### Key Differences
+The harness selects a project by dbt version, not by adapter.
+dbt-core added the `arguments:` property for generic tests in 1.10.5.
 
-| Feature | dbt-core | dbt Fusion |
-|---------|----------|------------|
-| Test arguments | Top-level | Must be in `arguments:` block |
-| Configuration | `+always_create_constraint` | Must be in `+meta:` block |
-| Flag required | No | `require_generic_test_arguments_property: true` |
+- A dbt version of 1.10.5 or later runs `dbt-current-syntax`.
+- A dbt version earlier than 1.10.5 runs `dbt-legacy-syntax`.
 
-### Example
+`get_project_dir` in `automated_tests/conftest.py` makes this choice.
+`CURRENT_SYNTAX_MIN_VERSION` holds the cutover version.
 
-**dbt-core format:**
-```yaml
-- relationships:
-    to: ref('parent')
-    field: parent_id
-```
+## Project Selection Matrix
 
-**dbt Fusion format:**
-```yaml
-- relationships:
-    arguments:
-      to: ref('parent')
-      field: parent_id
-```
+| Cell | Engine | Project |
+|---|---|---|
+| `snowflake` | dbt-core 1.5.12 | `dbt-legacy-syntax` |
+| `postgres` | dbt-core 1.11.x | `dbt-current-syntax` |
+| `oracle` | dbt-core 1.12.x | `dbt-current-syntax` |
+| `dpos_core` | dbt-core in Snowflake | `dbt-current-syntax` |
+| `fusion` | dbt Fusion 2.x | `dbt-current-syntax` |
+| `core2` | dbt-core 2.x | `dbt-current-syntax` |
+| `dpos_fusion` | dbt Fusion in Snowflake | `dbt-current-syntax` |
+
+The current-syntax project is the primary project.
+It also runs on PostgreSQL and Oracle.
+Keep every model and macro portable across those adapters.
+
+## Differences Between the Projects
+
+The two projects hold the same models, seeds, and macros.
+Only the YAML that declares generic tests differs.
+
+The current-syntax project:
+- nests test arguments under `arguments:`. The legacy project places them directly under the test name.
+- sets `always_create_constraint` inside a `+meta:` block. The legacy project sets it directly in config.
+- sets `flags: require_generic_test_arguments_property: true`. The legacy project sets no flag.
+
+The two project READMEs show the YAML examples for each form.
+
+## Adding Coverage
+
+Add new test coverage to **both** projects.
+Use the matching syntax in each project.
+Do not modernise the legacy project.
+It is the only proof that the package still supports dbt-core before 1.10.5.
 
 ## Running Tests Manually
 
-### dbt-core
+### dbt-legacy-syntax
 
 ```bash
-cd integration_tests/dbt-core
+cd integration_tests/dbt-legacy-syntax
 dbt deps
 dbt seed --full-refresh
 dbt run
 dbt test
 ```
 
-### dbt Fusion
+### dbt-current-syntax
 
 ```bash
-cd integration_tests/dbt-fusion
+cd integration_tests/dbt-current-syntax
 dbt deps
-dbt seed --full-refresh  # Known to fail - see Fusion compatibility issue
+dbt seed --full-refresh
 dbt run
 dbt test
 ```
 
 ## Automated Tests
 
-The automated test suite automatically uses the correct project based on the database being tested:
+The automated suite selects the project for you.
+It reads the cell's dbt version.
 
 ```bash
 cd integration_tests/automated_tests
 
-# Test with dbt-core (Postgres example)
-pytest --database postgres
+# Test a specific database
+python3 -m pytest --database postgres
 
 # Test with dbt Fusion
-pytest --database fusion
+python3 -m pytest --database fusion
 
 # Run all tests
-pytest
+python3 -m pytest
 ```
-
-## Known Issues
-
-### dbt Fusion Compatibility
-
-⚠️ **Test Metadata Access Issue**
-
-dbt Fusion currently has a compatibility issue with the `dbt_constraints` package:
-
-- **Problem**: Test arguments are not included in `test_metadata.kwargs`
-- **Impact**: Constraint creation fails because parameters like `pk_column_name` cannot be accessed
-- **Status**: Being investigated
-
-The Fusion project is structured correctly with the required YAML format, but constraints cannot be created until this metadata access issue is resolved.
 
 ## Git History
 
-The files in `dbt-core/` were moved using `git mv` to preserve git history. The `dbt-fusion/` project was copied from `dbt-core/` and modified with Fusion-compatible YAML formatting.
+The project directories were renamed with `git mv`.
+This preserves the git history.
