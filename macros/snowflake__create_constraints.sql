@@ -215,7 +215,7 @@
             or ( rely_clause == 'RELY' and constraint_rely == 'false' ) -%}
         {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
         {%- set query -%}
-        ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} MODIFY CONSTRAINT {{ constraint_name }} {{ rely_clause }}
+        ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} MODIFY CONSTRAINT "{{ constraint_name }}" {{ rely_clause }}
         {%- endset -%}
         {%- do log("Updating constraint: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
         {%- do run_query(query) -%}
