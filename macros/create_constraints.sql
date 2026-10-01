@@ -499,6 +499,8 @@
             {%- set test_parameters = raw_kwargs -%}
         {%- endif -%}
         {%- set test_name = test_model.test_metadata.name -%}
+        {# Quote columns also if a test has corresponding property #}
+        {% set quote_columns = quote_columns or test_parameters.get('quote_columns') %}
         {# Pass the dictionary of foreign key and relationship tests to test_selected. #}
         {%- set selected = dbt_constraints.test_selected(test_model, fk_dependency_dict) -%}
 
