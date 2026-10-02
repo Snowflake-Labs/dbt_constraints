@@ -56,7 +56,44 @@ vars:
 
   # Enable this parameter if you want to skip using RELY for join elimination
   dbt_constraints_always_norely: true
+
+  # Whether a test is considered for constraint creation when it doesn't say so itself.
+  # Defaults to true, matching prior behavior. Set to false for an opt-in-only project:
+  # only tests that explicitly set `dbt_constraints_enabled: true` will ever get a constraint.
+  dbt_constraints_default_opt_in: true
 ```
+
+### Enabling or disabling individual tests
+
+Every test considered for constraint creation checks its own `dbt_constraints_enabled`
+property, falling back to `dbt_constraints_default_opt_in` above when the test doesn't set
+one. Like `always_create_constraint` below, dbt Fusion reads this property from `meta` only,
+while dbt-core reads it from either place, so set both if you want it to apply under both
+engines:
+
+```yml
+models:
+  - name: your_model_name
+    columns:
+      - name: your_column_name
+        tests:
+          - unique:
+              config:
+                dbt_constraints_enabled: true
+                meta:
+                  dbt_constraints_enabled: true
+```
+
+A project with `dbt_constraints_default_opt_in: false` set can flip this project-wide: every
+test is excluded unless it opts in this way. Without `dbt_constraints_default_opt_in`,
+achieving the same opt-in-only result previously required setting *both* the `tests:` config
+block's plain `dbt_constraints_enabled: false` and a parallel `+meta: {dbt_constraints_enabled:
+false}` -- each path falls back to `true` independently, so leaving either one unset
+silently re-enabled every test project-wide for the other path. We hit exactly this in
+production: a project correctly set the plain key to `false` project-wide but not the `meta`
+key, and an otherwise-routine, broadly-scoped `dbt test` run created unreviewed `NOT NULL`
+constraints on several unrelated tables before anyone noticed. `dbt_constraints_default_opt_in`
+sets both paths' default together, so there's one place to get this right instead of two.
 
 ## Installation
 

@@ -443,6 +443,15 @@
     {%- set dbt_constraints_sources_fk_enabled = var('dbt_constraints_sources_fk_enabled', "false")|string|lower == "true" %}
     {%- set dbt_constraints_sources_nn_enabled = var('dbt_constraints_sources_nn_enabled', "false")|string|lower == "true" %}
     {%- set dbt_constraints_always_norely = var('dbt_constraints_always_norely', "false")|string|lower == "true" %}
+    {#- Default a test is considered for constraint creation when its own
+       `dbt_constraints_enabled` config (plain or under `meta:`) is unset. A project that wants
+       an opt-in-only posture -- only tests that explicitly set `dbt_constraints_enabled: true`
+       ever get a constraint -- previously had to override *both* independently-defaulting paths
+       itself (`+dbt_constraints_enabled: false` under `tests:` AND a parallel `+meta:
+       {dbt_constraints_enabled: false}` block), since each falls back to "true" on its own.
+       Missing either one silently re-enables every test project-wide. This variable sets both
+       at once; it defaults to "true" so existing projects are unaffected. #}
+    {%- set dbt_constraints_default_opt_in = var('dbt_constraints_default_opt_in', "true") -%}
 
     {%- set pk_uk_test_list = [] -%}
 
@@ -481,8 +490,8 @@
                 or (test_model.depends_on.nodes | length) == 1 )
             and test_model.config
             and test_model.config.enabled
-            and ( test_model.config.get("dbt_constraints_enabled", "true")|string|lower == "true"
-                or test_model.config.get("meta", {}).get("dbt_constraints_enabled", "true")|string|lower == "true" ) -%}
+            and ( test_model.config.get("dbt_constraints_enabled", dbt_constraints_default_opt_in)|string|lower == "true"
+                or test_model.config.get("meta", {}).get("dbt_constraints_enabled", dbt_constraints_default_opt_in)|string|lower == "true" ) -%}
 
         {#- In dbt Fusion, test arguments may be nested under 'arguments' key -#}
         {%- set raw_kwargs = test_model.test_metadata.kwargs -%}
