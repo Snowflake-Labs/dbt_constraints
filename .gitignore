@@ -16,13 +16,20 @@ __pycache__/
 *.egg
 *.egg-info/
 dist/
-build/
+# Anchored to the repo root. An unanchored "build/" also matches nested
+# directories such as integration_tests/automated_tests/docker/build/, which
+# left the test runner Dockerfiles untracked.
+/build/
 .Python
 pip-log.txt
 pip-delete-this-directory.txt
 
 # Virtual environments
 .venv/
+# Per-cell dbt client venvs, created by the integration test harness
+.venvs/
+# Deployable copies of the dbt projects, built by the in-database test cells
+.dpos-stage/
 venv/
 ENV/
 env/

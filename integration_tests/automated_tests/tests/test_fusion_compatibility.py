@@ -21,7 +21,7 @@ def test_fusion_version_detection(dbt_runner, target):
 
 
 @pytest.mark.fusion
-def test_fusion_seed_with_constraints(dbt_runner, target):
+def test_fusion_seed_with_constraints(dbt_runner, target, reset_target):
     """
     Test that demonstrates the Fusion compatibility issue.
 
@@ -38,9 +38,9 @@ def test_fusion_seed_with_constraints(dbt_runner, target):
     if target != "fusion":
         pytest.skip("Fusion-specific test")
 
-    # Clean and seed
-    clean_result = dbt_runner(["clean"])
-    assert clean_result.returncode == 0
+    # Remove target to force a full recompile. Do not use `dbt clean`. It also
+    # removes dbt_packages, which the session installs one time.
+    reset_target()
 
     # This should fail with the known error about missing parameters
     seed_result = dbt_runner(["seed", "--full-refresh"])
@@ -54,10 +54,10 @@ def test_fusion_seed_with_constraints(dbt_runner, target):
 @pytest.mark.fusion
 def test_fusion_project_parsing(dbt_runner, target):
     """
-    Test that Fusion can parse the dbt-fusion project correctly.
+    Test that Fusion can parse the current-syntax project correctly.
 
     This verifies that:
-    - The dbt-fusion project structure is correct
+    - The current-syntax project structure is correct
     - YAML files use the correct Fusion format (arguments: wrapper)
     - dbt Fusion can compile the project
     """

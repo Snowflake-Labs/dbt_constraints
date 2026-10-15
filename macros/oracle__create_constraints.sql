@@ -245,6 +245,14 @@ order by 1, 2
 {%- endmacro -%}
 
 {% macro oracle__drop_referential_constraints(relation) -%}
+    {#- Ignore only the errors that show the work is complete. A concurrent
+       run can drop the same constraint after the query and before this
+       statement. This is safe. Raise all other errors.
+       Before this change the code logged ORA-00060 (deadlock) and
+       continued. The constraint stayed in place. The run then failed
+       later, away from the true cause.
+       -2443: constraint does not exist
+       -942:  table or view does not exist -#}
     {%- call statement('drop_constraint_cascade') -%}
 BEGIN
     FOR REC IN (
@@ -259,8 +267,12 @@ BEGIN
             EXECUTE IMMEDIATE 'ALTER TABLE "'||REC.OWNER||'"."'||REC.TABLE_NAME||'" DROP CONSTRAINT "'||REC.CONSTRAINT_NAME||'" CASCADE';
         EXCEPTION
             WHEN OTHERS THEN
-                DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
-                DBMS_OUTPUT.PUT_LINE('Unable to drop constraint: ' || SQLERRM);
+                IF SQLCODE IN (-2443, -942) THEN
+                    DBMS_OUTPUT.ENABLE(BUFFER_SIZE => NULL);
+                    DBMS_OUTPUT.PUT_LINE('Constraint already gone: ' || SQLERRM);
+                ELSE
+                    RAISE;
+                END IF;
         END;
     END LOOP;
 END;
@@ -315,4 +327,20 @@ BEGIN
     END LOOP;
 END;
     {%- endcall -%}
+{% endmacro %}
+
+{#- Release constraints before the build phase starts.
+
+    oracle__drop_relation does the same work. It runs on the worker thread that
+    builds that model. A CASCADE drop of a constraint also locks each table whose
+    foreign key needs that constraint. Two threads can then take the same locks in
+    opposite order and deadlock with ORA-00060.
+
+    on-run-start calls this macro one time, from a single session, before the
+    threads start. This removes the contention. The DDL and the set of dropped
+    constraints stay the same. Only the time and the session count change. -#}
+{% macro oracle__release_constraints_for_rebuild(rebuild_relations) -%}
+    {%- for relation in rebuild_relations -%}
+        {{ oracle__drop_referential_constraints(relation) }}
+    {%- endfor -%}
 {% endmacro %}
