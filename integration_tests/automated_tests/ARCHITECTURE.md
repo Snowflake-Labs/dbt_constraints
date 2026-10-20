@@ -38,7 +38,8 @@ automated_tests/
 │   ├── test_source_constraints.py  # Constraints on sources, catalog-verified
 │   ├── test_fusion_compatibility.py
 │   ├── test_issue_105.py           # Issue tests
-│   └── test_issue_110.py
+│   ├── test_issue_110.py
+│   └── test_issue_127.py           # Quoted constraint names, reads baseline_build
 ├── .dpos-stage/                    # Generated. Deployable copies, gitignored
 ├── conftest.py                     # Pytest fixtures and the runner dispatch
 ├── dbt_venv.py                     # Per-cell uv virtual environments
@@ -339,13 +340,14 @@ The snowflake and dpos_* cells align with the versions dbt Projects on Snowflake
 supports.
 
 - The authoritative check is: `SELECT SYSTEM$SUPPORTED_DBT_VERSIONS();`
-- As of 2026-08-29 it returns dbt Core 1.9.4, 1.10.15, 1.11.11 and dbt Fusion
-  2.0.0-preview, 2.0.0-preview.175, 2.0.0-preview.186. DPOS pins exact patches.
-- 1.11.11 and 2.0.0-preview.186 now run IN Snowflake, as the `dpos_core` and
+- As of 2026-10-15 it returns dbt Core 1.9.4, 1.10.15, 1.11.11, 1.12.3 and dbt Fusion
+  2.0.0-preview, 2.0.0-preview.175, 2.0.0-preview.186, 2.0.0-preview.210, 2.0.0.
+  DPOS pins exact patches.
+- The newest of each engine, 1.12.3 and 2.0.0, runs IN Snowflake, as the `dpos_core` and
   `dpos_fusion` cells. Running them on the host proved only that the version worked
   locally.
 - The host keeps `snowflake` 1.5.12 as the backward-compatibility floor, `fusion`
-  2.0.0rc212 as the newest PyPI release, and `core2` 2.0.0b2. dbt Core 2.0 betas are not
+  2.0.8 as the newest Fusion GA release, and `core2` 2.0.0b2. dbt Core 2.0 betas are not
   a DPOS engine, so `core2` cannot move.
 - Reference doc: https://docs.snowflake.com/en/user-guide/data-engineering/dbt-projects-on-snowflake-dbt-core-versions
 - DPOS applies to the snowflake adapter only. postgres, oracle and sqlserver track dbt Labs releases. Adapter availability caps them: dbt-postgres tops out at 1.11.0 and dbt-sqlserver at 1.11.1. Neither can test 1.12.x. dbt-oracle reaches 1.12.0.
@@ -353,12 +355,13 @@ supports.
 ## Known Gaps
 
 - Snowflake also supports dbt Fusion 2.0.0-preview.175. The PyPI `dbt` package rc series starts at rc178. preview.175 cannot be installed with uv, so it is not covered.
-- 2.0.0rc212 is the newest `dbt` release on PyPI. It matches the dbt Labs `stable` channel, not `latest`. CDN latest (preview.218) is not on PyPI. Channel source: https://public.cdn.getdbt.com/fs/versions.json
+- 2.0.8 is the newest Fusion GA release. On 2026-10-15 it is the newest `dbt` release on PyPI and the dbt Labs `stable` and `latest` channels. Channel source: https://public.cdn.getdbt.com/fs/versions.json
 - install.sh is gone. No `latest` or `stable` channel auto-tracking remains. Bump all pins manually.
-- An unpinned `uv pip install dbt` resolves to version 1.0.0.40.21, the old dbt Cloud CLI. It installs without error. Only `2.0.0rcNNN` releases of the `dbt` package are Fusion. Exact pins are mandatory.
+- Always pin the `dbt` package exactly. Its old 1.0.0.x releases are the dbt Cloud CLI, a different tool that installs without error.
 - The in-database cells stage their dependencies with the matching PyPI engine, then run
-  in Snowflake. `dpos_fusion` stages with `dbt==2.0.0rc186` and runs on
-  `2.0.0-preview.186`. The mapping is exact today. If the two ever resolve dependencies
+  in Snowflake. `dpos_fusion` stages with `dbt==2.0.0` and runs on Snowflake's
+  `2.0.0`. A preview pin such as `2.0.0-preview.186` stages with `dbt==2.0.0rc186`.
+  If the two ever resolve dependencies
   differently, attach an external access integration and let Snowflake run `dbt deps`.
 - Most assertions read dbt stdout, not the catalog. `test_source_constraints.py` is the
   one module that verifies constraints in `INFORMATION_SCHEMA`, through a dbt singular
@@ -624,5 +627,5 @@ each other and as the host cells.
 
 ---
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-10-15
 **Framework Version**: 1.0 (Initial Release)

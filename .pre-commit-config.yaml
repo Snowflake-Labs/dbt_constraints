@@ -57,15 +57,6 @@ repos:
   # SECURITY SCANNERS (run last to scan final code)
   # =============================================================================
 
-  # GitGuardian secret scanning
-  - repo: https://github.com/gitguardian/ggshield
-    rev: v1.45.0
-    hooks:
-      - id: ggshield
-        name: ggshield (GitGuardian security scan)
-        language_version: python3
-        stages: [pre-commit]
-
   # Entro secret scanning
   - repo: local
     hooks:

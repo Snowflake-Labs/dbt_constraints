@@ -82,8 +82,8 @@ Two cells run dbt inside Snowflake instead of on this machine. Snowflake supplie
 engine, so no dbt client installs locally for the run.
 
 ```bash
-python3 -m pytest --database dpos_core     # dbt Core 1.11.11, in Snowflake
-python3 -m pytest --database dpos_fusion   # dbt Fusion 2.0.0-preview.186, in Snowflake
+python3 -m pytest --database dpos_core     # dbt Core 1.12.3, in Snowflake
+python3 -m pytest --database dpos_fusion   # dbt Fusion 2.0.0, in Snowflake
 ```
 
 These cells need `SNOWFLAKE_CONNECTION_NAME` in `.env` as well as the `SNOWFLAKE_*`
@@ -158,7 +158,7 @@ The matrix has two dbt v2 engines. They are different products. Do not confuse t
 Both are single self-contained wheels. Neither needs an adapter package or dbt-adapters. Both run against Snowflake. Both use the `integration_tests/dbt-fusion` project directory.
 
 ```bash
-python3 -m pytest --database fusion --dbt-version 2.0.0rc212
+python3 -m pytest --database fusion --dbt-version 2.0.8
 python3 -m pytest --database core2 --dbt-version 2.0.0b2
 ```
 
@@ -172,11 +172,12 @@ All versions are exact patch pins, not minors. `dbt_venv.py` pins `dbt-core` exa
 pins the adapter to the matching minor only. Adapter patch numbers are independent of
 core patch numbers. All installs use uv.
 
-The in-database cells use the Snowflake version string, which differs from the PyPI one.
-Snowflake reports `2.0.0-preview.186` where PyPI publishes `2.0.0rc186`. They are the
-same engine build.
+The in-database cells use the Snowflake version string. For a preview build it differs
+from the PyPI one: Snowflake reports `2.0.0-preview.186` where PyPI publishes
+`2.0.0rc186`. They are the same engine build. A GA version such as `2.0.0` is the same
+in both.
 
-> WARNING: Never run an unpinned `uv pip install dbt`. It resolves to version 1.0.0.40.21, the old dbt Cloud CLI. That tool is completely different and installs without error. Only `2.0.0rcNNN` releases of the `dbt` package are Fusion. Exact pins are mandatory.
+> WARNING: Always pin the `dbt` package exactly. Its old 1.0.0.x releases are the dbt Cloud CLI, a different tool that installs without error.
 
 ## Manual dbt Testing
 
@@ -279,5 +280,5 @@ See [`automated_tests/README.md`](automated_tests/README.md) for comprehensive d
 
 ---
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-10-15
 **Framework**: pytest + pytest-docker + Docker Compose
