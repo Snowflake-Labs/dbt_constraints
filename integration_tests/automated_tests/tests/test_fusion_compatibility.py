@@ -5,6 +5,8 @@ These tests document known compatibility issues between dbt Fusion and dbt_const
 Tests are marked with pytest.mark.xfail to indicate expected failures.
 """
 
+import re
+
 import pytest
 
 
@@ -17,7 +19,9 @@ def test_fusion_version_detection(dbt_runner, target):
     # Test that we can run dbt commands
     result = dbt_runner(["--version"])
     assert result.returncode == 0
-    assert "dbt-fusion" in result.stdout.lower()
+    # Preview builds print "dbt-fusion 2.0.0-preview.N". GA builds print "dbt 2.0.N".
+    # dbt Core prints "Core:" and a 1.x version, so neither pattern matches it.
+    assert re.match(r"dbt(-fusion)? 2\.", result.stdout.strip().lower()), result.stdout
 
 
 @pytest.mark.fusion
