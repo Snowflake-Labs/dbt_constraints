@@ -1026,7 +1026,18 @@ def run_dbt(
             print(f"\n🧹 Preparing {database}: seed, build")
         else:
             print(f"\n🧹 Preparing {project_dir.name}: clean, seed, build")
-            _run_dbt_command("dbt clean")
+            clean = _run_dbt_command("dbt clean", check=database != "fusion")
+            # dbt Fusion 2.0.0 to 2.0.8 removes target, then fails to remove
+            # target/metadata, and exits 1 after it prints that the clean finished.
+            # Accept that exit code only when the success line is present.
+            # Remove this when a Fusion release exits 0.
+            if (
+                clean.returncode != 0
+                and "Finished 'clean' successfully" not in clean.stdout
+            ):
+                raise subprocess.CalledProcessError(
+                    clean.returncode, "dbt clean", clean.stdout, clean.stderr
+                )
         _run_dbt_command("dbt seed --full-refresh")
         # Tolerate a failure here. Some models cannot build on every target, for
         # example the issue_105 custom-schema models on Oracle, where a schema is a

@@ -22,25 +22,30 @@
       rely             'RELY' or 'NORELY', the WRONG value the package must correct
       constraint_name  optional. Pass a non-default name to check that the package finds
                        an existing constraint by its COLUMNS rather than by its name,
-                       which is the second half of the 1.0.9 fix.
+                       which is the second half of the 1.0.9 fix. The value is SQL
+                       identifier text, so a quoted name such as '"Mixed_Case"' keeps
+                       its case.
+      auto_name        optional. Set true to add the constraint with no name. Snowflake
+                       then generates a SYS_CONSTRAINT_<uuid> name, as in issue #127.
 
     RELY and NORELY are Snowflake-only, so every other adapter gets a no-op and the
     package simply creates the constraint as usual.
 -#}
-{%- macro stage_existing_constraint(column_names, rely, constraint_name=none) -%}
-    {{ return(adapter.dispatch('stage_existing_constraint', 'dbt_constraints_integration_tests')(column_names, rely, constraint_name)) }}
+{%- macro stage_existing_constraint(column_names, rely, constraint_name=none, auto_name=false) -%}
+    {{ return(adapter.dispatch('stage_existing_constraint', 'dbt_constraints_integration_tests')(column_names, rely, constraint_name, auto_name)) }}
 {%- endmacro -%}
 
 
 {#- No-op. Only Snowflake carries a rely flag on a constraint. -#}
-{%- macro default__stage_existing_constraint(column_names, rely, constraint_name) -%}
+{%- macro default__stage_existing_constraint(column_names, rely, constraint_name, auto_name) -%}
 {%- endmacro -%}
 
 
-{%- macro snowflake__stage_existing_constraint(column_names, rely, constraint_name) -%}
+{%- macro snowflake__stage_existing_constraint(column_names, rely, constraint_name, auto_name) -%}
     {%- if execute -%}
         {%- set name = constraint_name
             or (this.identifier ~ "_" ~ column_names | join("_") ~ "_UK") | upper -%}
+        {%- set name_clause = "" if auto_name else " CONSTRAINT " ~ name -%}
         {%- set columns_csv = column_names | join(", ") -%}
 
         {#- No DROP first. These models are materialized='table', so each run replaces
@@ -50,11 +55,12 @@
             "syntax error ... unexpected 'EXISTS'". Snowflake has no IF EXISTS clause on
             DROP CONSTRAINT. -#}
         {%- do run_query(
-            "ALTER TABLE " ~ this ~ " ADD CONSTRAINT " ~ name
+            "ALTER TABLE " ~ this ~ " ADD" ~ name_clause
             ~ " UNIQUE (" ~ columns_csv ~ ") " ~ rely
         ) -%}
         {%- do log(
-            "Test staging: pre-created " ~ name ~ " as " ~ rely ~ " on " ~ this.identifier,
+            "Test staging: pre-created " ~ ("an unnamed constraint" if auto_name else name)
+            ~ " as " ~ rely ~ " on " ~ this.identifier,
             info=true
         ) -%}
     {%- endif -%}

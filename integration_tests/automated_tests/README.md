@@ -14,7 +14,7 @@ pytest --database postgres --dbt-version 1.11.14
 pytest --database postgres
 
 # Test Snowflake (requires SNOWFLAKE_* env vars)
-pytest --database snowflake --dbt-version 1.11.11
+pytest --database snowflake --dbt-version 1.5.12
 
 # Test all databases and versions
 pytest
@@ -108,7 +108,7 @@ The matrix has two dbt v2 engines. They are different products. Do not confuse t
 Both are single self-contained wheels. Neither needs an adapter package or dbt-adapters. Both run against Snowflake. Both use the `integration_tests/dbt-fusion` project directory. Fusion runs through `docker/compose/fusion-runner.yml`. core2 runs through `docker/compose/core2-runner.yml`. Both build `docker/build/Dockerfile.v2`.
 
 ```bash
-pytest --database fusion --dbt-version 2.0.0rc212
+pytest --database fusion --dbt-version 2.0.8
 pytest --database core2 --dbt-version 2.0.0b2
 ```
 
@@ -126,10 +126,10 @@ The snowflake cells align with the versions dbt Projects on Snowflake (DPOS) sup
 ## Known Gaps
 
 - Snowflake also supports dbt Fusion 2.0.0-preview.175. The PyPI `dbt` package rc series starts at rc178. preview.175 cannot be installed with uv, so it is not covered.
-- 2.0.0rc212 is the newest `dbt` release on PyPI. It matches the dbt Labs `stable` channel, not `latest`. CDN latest (preview.218) is not on PyPI. Channel source: https://public.cdn.getdbt.com/fs/versions.json
+- 2.0.8 is the newest Fusion GA release. On 2026-10-15 it is the newest `dbt` release on PyPI and the dbt Labs `stable` and `latest` channels. Channel source: https://public.cdn.getdbt.com/fs/versions.json
 - install.sh is gone. No `latest` or `stable` channel auto-tracking remains. Bump all pins manually.
 
-> WARNING: Never run an unpinned `uv pip install dbt`. It resolves to version 1.0.0.40.21, the old dbt Cloud CLI. That tool is completely different and installs without error. Only `2.0.0rcNNN` releases of the `dbt` package are Fusion. Exact pins are mandatory.
+> WARNING: Always pin the `dbt` package exactly. Its old 1.0.0.x releases are the dbt Cloud CLI, a different tool that installs without error.
 
 ## Version Pinning
 
@@ -271,5 +271,5 @@ For issues:
 
 ---
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-10-15
 **Framework Version**: 1.0
