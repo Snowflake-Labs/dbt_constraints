@@ -214,8 +214,12 @@
     {%- if ( rely_clause == 'NORELY' and constraint_rely == 'true' )
             or ( rely_clause == 'RELY' and constraint_rely == 'false' ) -%}
         {%- set ddl_prefix_for_alter = 'ICEBERG' if table_relation.is_iceberg_format else '' -%}
+        {#- Quote the name exactly as SHOW ... KEYS returns it. A Snowflake-generated
+            name such as SYS_CONSTRAINT_<uuid> has hyphens and lower-case letters, and a
+            user name can have mixed case. Double any quote character inside the name. -#}
+        {%- set quoted_name = '"' ~ constraint_name | replace('"', '""') ~ '"' -%}
         {%- set query -%}
-        ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} MODIFY CONSTRAINT "{{ constraint_name }}" {{ rely_clause }}
+        ALTER {{ ddl_prefix_for_alter }} TABLE {{ table_relation }} MODIFY CONSTRAINT {{ quoted_name }} {{ rely_clause }}
         {%- endset -%}
         {%- do log("Updating constraint: " ~ constraint_name ~ " " ~ rely_clause, info=true) -%}
         {%- do run_query(query) -%}
