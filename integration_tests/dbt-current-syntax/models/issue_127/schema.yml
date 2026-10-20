@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  # Issue #127 regression. Each post-hook pre-creates a NORELY constraint under a name
+  # that needs quotes in SQL. The data is unique, so the package must update each one to
+  # RELY during on-run-end. See macros/stage_existing_constraint.sql.
+  # See: https://github.com/Snowflake-Labs/dbt_constraints/issues/127
+  - name: dim_issue_127_auto_named
+    description: "Pre-created NORELY with a Snowflake-generated SYS_CONSTRAINT_<uuid> name."
+    columns:
+      - name: o_orderkey
+        description: "Unique, so the flag must become RELY"
+    tests:
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
+
+  - name: dim_issue_127_mixed_case
+    description: "Pre-created NORELY under a mixed-case name that contains quotes."
+    columns:
+      - name: o_orderkey
+        description: "Unique, so the flag must become RELY"
+    tests:
+      - dbt_constraints.unique_key:
+          column_name: o_orderkey
+          config:
+            severity: warn
