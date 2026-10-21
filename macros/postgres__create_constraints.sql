@@ -307,3 +307,103 @@
         {{ postgres__drop_referential_constraints(relation) }}
     {%- endfor -%}
 {% endmacro %}
+
+
+
+{#- PostgreSQL enforces every constraint type (issue #114). -#}
+{%- macro postgres__adapter_enforced_constraint_types() -%}
+    {{ return(['not_null', 'primary_key', 'unique_key', 'foreign_key']) }}
+{%- endmacro -%}
+
+
+{#- These lookups return only constraints that PostgreSQL enforces and has
+    validated:
+    - convalidated excludes a constraint added NOT VALID.
+    - conenforced (PostgreSQL 18) excludes a constraint added NOT ENFORCED.
+      to_jsonb reads it, so the query also runs on versions that lack it.
+    - indisvalid excludes a unique index that a failed build left behind.
+    - A table with classic inheritance children is excluded. A query on the
+      parent reads the children, but the parent's constraint does not cover
+      them. A partitioned table (relkind 'p') is safe, because its keys must
+      include the partition key.
+    A deferrable constraint qualifies. dbt commits the model before a test runs,
+    and the database checks a deferred constraint at that commit. -#}
+{%- macro postgres__lookup_enforced_unique_keys(table_relation) -%}
+    {%- set lookup_query -%}
+    select c.conname as constraint_name
+        , c.contype as constraint_type
+        , upper(a.attname) as column_name
+        , coalesce((to_jsonb(i) ->> 'indnullsnotdistinct')::boolean, false) as nulls_not_distinct
+    from pg_constraint c
+    join pg_class tbl on tbl.oid = c.conrelid
+    join pg_namespace ns on ns.oid = tbl.relnamespace
+    join pg_index i on i.indexrelid = c.conindid
+    cross join lateral unnest(c.conkey) with ordinality as k(attnum, ord)
+    join pg_attribute a on a.attrelid = tbl.oid and a.attnum = k.attnum
+    where ns.nspname = '{{ table_relation.schema | replace("'", "''") }}'
+        and tbl.relname = '{{ table_relation.identifier | replace("'", "''") }}'
+        and c.contype in ('p', 'u')
+        and c.convalidated
+        and coalesce((to_jsonb(c) ->> 'conenforced')::boolean, true)
+        and i.indisvalid
+        and (tbl.relkind = 'p'
+            or not exists (select 1 from pg_inherits h where h.inhparent = tbl.oid))
+    order by c.conname, k.ord
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(dbt_constraints.keys_from_lookup_rows(run_query(lookup_query))) }}
+{%- endmacro -%}
+
+
+{#- attnotnull is also true for a NOT VALID not-null constraint, which
+    PostgreSQL 18 stores as contype 'n'. Exclude a column that has one. -#}
+{%- macro postgres__lookup_enforced_not_null_columns(table_relation) -%}
+    {%- set lookup_query -%}
+    select upper(a.attname) as column_name
+    from pg_attribute a
+    join pg_class tbl on tbl.oid = a.attrelid
+    join pg_namespace ns on ns.oid = tbl.relnamespace
+    where ns.nspname = '{{ table_relation.schema | replace("'", "''") }}'
+        and tbl.relname = '{{ table_relation.identifier | replace("'", "''") }}'
+        and a.attnum > 0
+        and not a.attisdropped
+        and a.attnotnull
+        and not exists (
+            select 1 from pg_constraint n
+            where n.conrelid = tbl.oid
+                and n.contype = 'n'
+                and n.conkey = array[a.attnum]
+                and not n.convalidated )
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(run_query(lookup_query).columns["column_name"].values() | map('upper') | list) }}
+{%- endmacro -%}
+
+
+{%- macro postgres__lookup_enforced_foreign_keys(fk_relation, pk_relation) -%}
+    {%- set lookup_query -%}
+    select c.conname as constraint_name
+        , upper(ca.attname) as column_name
+        , upper(pa.attname) as pk_column_name
+    from pg_constraint c
+    join pg_class ct on ct.oid = c.conrelid
+    join pg_namespace cn on cn.oid = ct.relnamespace
+    join pg_class pt on pt.oid = c.confrelid
+    join pg_namespace pn on pn.oid = pt.relnamespace
+    cross join lateral unnest(c.conkey, c.confkey) with ordinality as k(child_attnum, parent_attnum, ord)
+    join pg_attribute ca on ca.attrelid = ct.oid and ca.attnum = k.child_attnum
+    join pg_attribute pa on pa.attrelid = pt.oid and pa.attnum = k.parent_attnum
+    where cn.nspname = '{{ fk_relation.schema | replace("'", "''") }}'
+        and ct.relname = '{{ fk_relation.identifier | replace("'", "''") }}'
+        and pn.nspname = '{{ pk_relation.schema | replace("'", "''") }}'
+        and pt.relname = '{{ pk_relation.identifier | replace("'", "''") }}'
+        and c.contype = 'f'
+        and c.convalidated
+        and coalesce((to_jsonb(c) ->> 'conenforced')::boolean, true)
+        and (ct.relkind = 'p'
+            or not exists (select 1 from pg_inherits h where h.inhparent = ct.oid))
+    order by c.conname, k.ord
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(dbt_constraints.keys_from_lookup_rows(run_query(lookup_query))) }}
+{%- endmacro -%}

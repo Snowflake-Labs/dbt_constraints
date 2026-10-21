@@ -153,3 +153,189 @@ select validation_errors.* from (
     {%- endfor -%}
     {{ return(join_conditions) }}
 {%- endmacro -%}
+
+
+
+{#- Skip a test when the database already enforces the constraint (issue #114).
+
+   A test of a constraint that the database enforces and has validated cannot
+   find a failing row. A large incremental model can spend longer on that test
+   than on its load. Set the var `dbt_constraints_skip_tests_if_enforced` to true
+   to skip such tests.
+
+   A skipped test still produces its full SQL. skipped_test_sql adds a predicate
+   that is never true, so the test returns no rows. The database can drop the
+   scan because the predicate is a constant.
+
+   Only a constraint that the database enforces AND has validated qualifies. A
+   NOT VALID, NOVALIDATE, DISABLED, or RELY-only constraint does not. Each adapter
+   reports what its database can enforce, and implements the catalog lookups. -#}
+
+{#- Return the constraint types that this database enforces. -#}
+{%- macro adapter_enforced_constraint_types() -%}
+    {{ return(adapter.dispatch('adapter_enforced_constraint_types', 'dbt_constraints')()) }}
+{%- endmacro -%}
+
+{#- An adapter that does not say what it enforces never skips a test. -#}
+{%- macro default__adapter_enforced_constraint_types() -%}
+    {{ return([]) }}
+{%- endmacro -%}
+
+
+{#- Return the validated, enforced primary and unique keys on a table. Each item
+   is a dict: name, type ('p' or 'u'), columns (list), and nulls_not_distinct
+   (true when the key rejects repeated NULLs). -#}
+{%- macro lookup_enforced_unique_keys(table_relation) -%}
+    {{ return(adapter.dispatch('lookup_enforced_unique_keys', 'dbt_constraints')(table_relation)) }}
+{%- endmacro -%}
+
+{%- macro default__lookup_enforced_unique_keys(table_relation) -%}
+    {{ return([]) }}
+{%- endmacro -%}
+
+
+{#- Return the upper-case names of the columns that have a validated, enforced
+   NOT NULL. -#}
+{%- macro lookup_enforced_not_null_columns(table_relation) -%}
+    {{ return(adapter.dispatch('lookup_enforced_not_null_columns', 'dbt_constraints')(table_relation)) }}
+{%- endmacro -%}
+
+{%- macro default__lookup_enforced_not_null_columns(table_relation) -%}
+    {{ return([]) }}
+{%- endmacro -%}
+
+
+{#- Return the validated, enforced foreign keys from fk_relation to pk_relation.
+   Each item is a dict: name, columns (child columns), and pk_columns (the parent
+   columns in the same order). -#}
+{%- macro lookup_enforced_foreign_keys(fk_relation, pk_relation) -%}
+    {{ return(adapter.dispatch('lookup_enforced_foreign_keys', 'dbt_constraints')(fk_relation, pk_relation)) }}
+{%- endmacro -%}
+
+{%- macro default__lookup_enforced_foreign_keys(fk_relation, pk_relation) -%}
+    {{ return([]) }}
+{%- endmacro -%}
+
+
+{#- Turn the rows of a key lookup into the dicts the lookups above return. The
+   query must order its rows by constraint and then by column position, and name
+   its columns constraint_name and column_name. It can also return
+   constraint_type, nulls_not_distinct, and pk_column_name. -#}
+{%- macro keys_from_lookup_rows(query_results) -%}
+    {%- set keys = [] -%}
+    {%- set by_name = {} -%}
+    {%- for row in query_results.rows -%}
+        {%- set name = row["constraint_name"] | string -%}
+        {%- if name not in by_name -%}
+            {%- set key = {
+                "name": name,
+                "type": (row["constraint_type"] if "constraint_type" in query_results.column_names else "") | string | lower,
+                "nulls_not_distinct": "nulls_not_distinct" in query_results.column_names
+                    and row["nulls_not_distinct"] | string | lower in ("true", "1", "y", "yes"),
+                "columns": [],
+                "pk_columns": [] } -%}
+            {%- do by_name.update({name: key}) -%}
+            {%- do keys.append(key) -%}
+        {%- endif -%}
+        {%- do by_name[name]["columns"].append(row["column_name"] | string | upper) -%}
+        {%- if "pk_column_name" in query_results.column_names -%}
+            {%- do by_name[name]["pk_columns"].append(row["pk_column_name"] | string | upper) -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {{ return(keys) }}
+{%- endmacro -%}
+
+
+{#- Return the name of a validated, enforced constraint that guarantees the test
+   passes, or none.
+
+   A unique constraint lets repeated NULLs through, but the unique_key test counts
+   two NULL keys as a duplicate. So a unique constraint qualifies only when it
+   rejects repeated NULLs, or when every key column has a validated NOT NULL. A
+   primary key qualifies for both tests. A foreign key must join the same child
+   and parent columns, in the same pairs. -#}
+{%- macro enforced_constraint_for_test(kind, table_relation, column_names, pk_relation=none, pk_column_names=[]) -%}
+    {%- if kind in ('primary_key', 'unique_key') -%}
+        {#- A set inside a for loop does not outlive one pass, so hold the lazy
+            NOT NULL lookup in a namespace. -#}
+        {%- set nn = namespace(columns=none) -%}
+        {%- for key in dbt_constraints.lookup_enforced_unique_keys(table_relation)
+                if dbt_constraints.column_list_matches(key.columns, column_names) -%}
+            {%- if key.type == 'p' or (kind == 'unique_key' and key.nulls_not_distinct) -%}
+                {{ return(key.name) }}
+            {%- endif -%}
+            {%- if nn.columns is none -%}
+                {%- set nn.columns = dbt_constraints.lookup_enforced_not_null_columns(table_relation) -%}
+            {%- endif -%}
+            {%- set ns = namespace(all_not_null=true) -%}
+            {%- for column in column_names | map('upper') | map('trim', '"') if column not in nn.columns -%}
+                {%- set ns.all_not_null = false -%}
+            {%- endfor -%}
+            {%- if ns.all_not_null -%}
+                {{ return(key.name) }}
+            {%- endif -%}
+        {%- endfor -%}
+
+    {%- elif kind == 'foreign_key' and pk_relation is not none
+            and column_names | count > 0 and column_names | count == pk_column_names | count -%}
+        {%- set test_pairs = [] -%}
+        {%- for i in range(column_names | count) -%}
+            {%- do test_pairs.append(column_names[i] | upper | trim('"') ~ '=' ~ pk_column_names[i] | upper | trim('"')) -%}
+        {%- endfor -%}
+        {%- for key in dbt_constraints.lookup_enforced_foreign_keys(table_relation, pk_relation) -%}
+            {%- set key_pairs = [] -%}
+            {%- for i in range(key.columns | count) if i < key.pk_columns | count -%}
+                {%- do key_pairs.append(key.columns[i] | upper ~ '=' ~ key.pk_columns[i] | upper) -%}
+            {%- endfor -%}
+            {%- if dbt_constraints.column_list_matches(key_pairs, test_pairs) -%}
+                {{ return(key.name) }}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endif -%}
+
+    {{ return(none) }}
+{%- endmacro -%}
+
+
+{#- Return true when `relation` is a table relation rather than SQL text. A test
+   with a `where` config receives "(select ... where ...) dbt_subquery" instead
+   of a relation, and that test is never skipped. -#}
+{%- macro is_table_relation_object(relation) -%}
+    {{ return(relation is not none and relation is not string
+        and relation.identifier is defined and relation.identifier
+        and relation.schema is defined and relation.schema) }}
+{%- endmacro -%}
+
+
+{#- Return the test SQL, or the never-true form when the test can be skipped. -#}
+{%- macro sql_or_skipped_for_enforced(kind, test_sql, model, column_names, pk_table=none, pk_column_names=[]) -%}
+    {%- if execute
+        and var('dbt_constraints_skip_tests_if_enforced', "false")|string|lower == "true"
+        and kind in dbt_constraints.adapter_enforced_constraint_types()
+        and dbt_constraints.is_table_relation_object(model)
+        and (kind != 'foreign_key' or dbt_constraints.is_table_relation_object(pk_table)) -%}
+        {%- set constraint_name = dbt_constraints.enforced_constraint_for_test(
+            kind, model, column_names, pk_table, pk_column_names) -%}
+        {%- if constraint_name -%}
+            {%- do log("dbt Constraints: skipping validation of " ~ kind ~ " on " ~ model
+                ~ " because the database enforces validated constraint " ~ constraint_name, info=true) -%}
+            {{ return(dbt_constraints.skipped_test_sql(test_sql, kind, constraint_name)) }}
+        {%- endif -%}
+    {%- endif -%}
+    {{ return(test_sql) }}
+{%- endmacro -%}
+
+
+{#- Wrap the full test SQL in a predicate that is never true. A database can
+   override this to use its own form. -#}
+{%- macro skipped_test_sql(test_sql, kind, constraint_name) -%}
+    {{ return(adapter.dispatch('skipped_test_sql', 'dbt_constraints')(test_sql, kind, constraint_name)) }}
+{%- endmacro -%}
+
+{%- macro default__skipped_test_sql(test_sql, kind, constraint_name) -%}
+/* dbt_constraints: validation skipped, the database enforces validated {{ kind }} constraint {{ constraint_name | replace('*/', '') }} */
+select * from (
+{{ test_sql }}
+) dbt_constraints_enforced
+where 1 = 0
+{%- endmacro -%}

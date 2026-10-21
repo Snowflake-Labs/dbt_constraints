@@ -9,7 +9,8 @@
         {%- do column_names.append(column_name) -%}
     {%- endif -%}
 
-    {{ return(adapter.dispatch('test_primary_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
+    {%- set test_sql = adapter.dispatch('test_primary_key', 'dbt_constraints')(model, column_names, quote_columns) -%}
+    {{ return(dbt_constraints.sql_or_skipped_for_enforced('primary_key', test_sql, model, column_names)) }}
 
 {%- endtest -%}
 
@@ -22,7 +23,8 @@
         {%- do column_names.append(column_name) -%}
     {%- endif -%}
 
-    {{ return(adapter.dispatch('test_unique_key', 'dbt_constraints')(model, column_names, quote_columns)) }}
+    {%- set test_sql = adapter.dispatch('test_unique_key', 'dbt_constraints')(model, column_names, quote_columns) -%}
+    {{ return(dbt_constraints.sql_or_skipped_for_enforced('unique_key', test_sql, model, column_names)) }}
 
 {%- endtest -%}
 
@@ -41,7 +43,8 @@
     {%- endif -%}
     {%- set pk_table_name = pk_table_name or to -%}
 
-    {{ return(adapter.dispatch('test_foreign_key', 'dbt_constraints')(model, fk_column_names, pk_table_name, pk_column_names, quote_columns)) }}
+    {%- set test_sql = adapter.dispatch('test_foreign_key', 'dbt_constraints')(model, fk_column_names, pk_table_name, pk_column_names, quote_columns) -%}
+    {{ return(dbt_constraints.sql_or_skipped_for_enforced('foreign_key', test_sql, model, fk_column_names, pk_table_name, pk_column_names)) }}
 
 {%- endtest -%}
 
@@ -468,7 +471,9 @@
        depends on exactly one node. That node is the source. A generic test on a
        model always sets attached_node. The test_metadata checks exclude singular
        tests. This check follows the depends_on checks, because the filter on
-       `nodes` needs `nodes` to exist. -#}
+       `nodes` needs `nodes` to exist.
+       A test can turn constraints off in config or in config.meta. Either one
+       set to false turns them off. Both default to true. -#}
     {%- for test_model in graph.nodes.values() | selectattr("resource_type", "equalto", "test")
             if test_model.test_metadata
             and test_model.test_metadata.kwargs
@@ -481,8 +486,8 @@
                 or (test_model.depends_on.nodes | length) == 1 )
             and test_model.config
             and test_model.config.enabled
-            and ( test_model.config.get("dbt_constraints_enabled", "true")|string|lower == "true"
-                or test_model.config.get("meta", {}).get("dbt_constraints_enabled", "true")|string|lower == "true" ) -%}
+            and test_model.config.get("dbt_constraints_enabled", "true")|string|lower != "false"
+            and test_model.config.get("meta", {}).get("dbt_constraints_enabled", "true")|string|lower != "false" -%}
 
         {#- In dbt Fusion, test arguments may be nested under 'arguments' key -#}
         {%- set raw_kwargs = test_model.test_metadata.kwargs -%}
@@ -499,8 +504,11 @@
             {%- set test_parameters = raw_kwargs -%}
         {%- endif -%}
         {%- set test_name = test_model.test_metadata.name -%}
-        {# Quote columns also if a test has corresponding property #}
-        {% set quote_columns = quote_columns or test_parameters.get('quote_columns') %}
+        {#- Quote the columns when either the hook argument or the test sets
+            quote_columns. The test value can arrive as a string, so compare its
+            text. Use a new name, so one test's value does not carry over to the next. -#}
+        {%- set test_quote_columns = quote_columns
+            or test_parameters.get('quote_columns', false)|string|lower == 'true' -%}
         {# Pass the dictionary of foreign key and relationship tests to test_selected. #}
         {%- set selected = dbt_constraints.test_selected(test_model, fk_dependency_dict) -%}
 
@@ -607,11 +615,11 @@
                             and test_name in("unique_key", "unique_combination_of_columns", "unique"))
                         -%}
                             {%- if dbt_constraints.adapter_supports_rely_norely("not_null") == true -%}
-                                {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
+                                {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, test_quote_columns, lookup_cache, rely_clause) -%}
                             {%- endif -%}
-                            {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
+                            {%- do dbt_constraints.create_primary_key(table_relation, column_names, ns.verify_permissions, test_quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                         {%- else  -%}
-                            {%- do dbt_constraints.create_unique_key(table_relation, column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
+                            {%- do dbt_constraints.create_unique_key(table_relation, column_names, ns.verify_permissions, test_quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                         {%- endif -%}
                     {%- else  -%}
                         {%- do log("Skipping primary/unique key because a physical column name was not found on the table: " ~ table_models[0].name ~ " " ~ column_names, info=true) -%}
@@ -682,7 +690,7 @@
                         {%- elif not dbt_constraints.table_columns_all_exist(fk_table_relation, fk_column_names, lookup_cache) -%}
                             {%- do log("Skipping foreign key because a physical column was not found on the fk table: " ~ fk_model.name ~ " " ~ fk_column_names, info=true) -%}
                         {%- else  -%}
-                            {%- do dbt_constraints.create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, ns.verify_permissions, quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
+                            {%- do dbt_constraints.create_foreign_key(pk_table_relation, pk_column_names, fk_table_relation, fk_column_names, ns.verify_permissions, test_quote_columns, test_parameters.constraint_name, lookup_cache, rely_clause) -%}
                         {%- endif -%}
                     {%- else  -%}
                         {%- if fk_table_relation is none or not fk_table_relation.is_table -%}
@@ -723,7 +731,7 @@
 
                 {%- if table_relation and table_relation.is_table -%}
                     {%- if dbt_constraints.table_columns_all_exist(table_relation, column_names, lookup_cache) -%}
-                        {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, quote_columns, lookup_cache, rely_clause) -%}
+                        {%- do dbt_constraints.create_not_null(table_relation, column_names, ns.verify_permissions, test_quote_columns, lookup_cache, rely_clause) -%}
                     {%- else  -%}
                         {%- do log("Skipping not null constraint because a physical column name was not found on the table: " ~ table_models[0].name ~ " " ~ column_names, info=true) -%}
                     {%- endif -%}

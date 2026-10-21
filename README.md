@@ -24,6 +24,19 @@ When you add this package, dbt will automatically begin to create __unique keys_
 
 The `dbt_constraints_enabled` variable can be set to `false` in your project to disable automatic constraint generation. By default dbt Constraints only creates constraints on models. To allow constraints on sources, you can set `dbt_constraints_sources_enabled` to `true`. The package will verify that you have sufficient database privileges to create constraints on sources.
 
+You can also turn off constraint generation for a single test, or for a folder of tests. Set `dbt_constraints_enabled: false` in the test's `config: meta:`. Before version 1.0.12, the package created the constraint anyway unless the test also set the flag directly under `config:`.
+
+```yml
+      - dbt_constraints.unique_key:
+          arguments:
+            column_names: [order_key]
+          config:
+            meta:
+              dbt_constraints_enabled: false
+```
+
+The package also reads `dbt_constraints_enabled` directly under a test's `config:`, and either place set to `false` turns the constraint off. Use `meta`, because dbt Fusion rejects an unknown key directly under a test's `config:`, and dbt-core 1.5 ignores it.
+
 > **Bug fix: `dbt_constraints_sources_enabled` now takes effect.**
 > Earlier releases did not create constraints on sources. The package looked up test
 > dependencies in `graph.nodes`, but dbt holds sources in `graph.sources`, so every
@@ -65,7 +78,7 @@ vars:
 ```yml
 packages:
   - package: Snowflake-Labs/dbt_constraints
-    version: 1.0.11
+    version: 1.0.12
 # <see https://github.com/Snowflake-Labs/dbt_constraints/releases/latest> for the latest version tag.
 # You can also pull the latest changes from Github with the following:
 #  - git: "https://github.com/Snowflake-Labs/dbt_constraints.git"
@@ -185,6 +198,38 @@ Version 1.0.0 introduces a more advanced set of criteria for selecting tests to 
 Additional notes:
 * The `foreign_key` test will ignore any rows with a null column, even if only one of two columns in a compound key is null. If you also want to ensure FK columns are not null, you should add standard `not_null` tests to your model which will add not null constraints to the table.
 * You may need to manually drop a primary key constraint from a table if you change the columns in the constraint. This is not necessary for table materializations or if you do a full-refresh of an incremental model.
+
+## Advanced: Skipping tests that the database already enforces
+
+A database that enforces a constraint, and has validated it, cannot hold a row that breaks it. A `primary_key`, `unique_key`, or `foreign_key` test on that constraint cannot fail, but it still reads the whole table. On a large incremental model, the test can take longer than the load.
+
+Set this variable to skip those tests:
+
+```yml
+vars:
+  dbt_constraints_skip_tests_if_enforced: true
+```
+
+A skipped test still runs. The package keeps the test's full SQL and adds a predicate that is never true (`where 1 = 0`), so the test returns no rows and passes. PostgreSQL and Oracle plan the constant predicate without reading the table. The package logs `dbt Constraints: skipping validation of <test> on <table> because the database enforces validated constraint <name>`.
+
+The package skips a test only when all of the following are true:
+
+* The database enforces that type of constraint:
+
+  | Database | Enforced constraints |
+  | --- | --- |
+  | PostgreSQL, Oracle | primary key, unique key, foreign key, not null |
+  | Vertica | primary key and unique key (when `ENABLED`), not null |
+  | Snowflake, Redshift, BigQuery | not null only, so key tests never skip |
+
+* The database has validated the constraint. A constraint added `NOT VALID` or `NOT ENFORCED` on PostgreSQL, or `ENABLE NOVALIDATE` or `DISABLE` on Oracle, does not count. `RELY` does not count either, because it does not check the data. A deferrable constraint counts, because dbt commits the model before its tests run.
+* The constraint has exactly the test's columns. A foreign key must also reference the test's parent table, and pair the same child and parent columns.
+* For a `unique_key` test, the key cannot hold repeated NULLs. A unique constraint allows them, but the test counts them as duplicates. So the key columns must each have a validated NOT NULL, or the constraint must be a primary key, or (PostgreSQL 15 and later) it must be `NULLS NOT DISTINCT`.
+* The test does not set a `where` config. Such a test reads a subquery, not the table.
+
+A table that dbt rebuilds in this run has no constraints when its tests run, because the package releases them first. So the skip applies to incremental models and snapshots on later runs, not to `table` models or a `--full-refresh`. Oracle needs version 12.2 or later. The Vertica lookups have no integration tests.
+
+To change the never-true form for a database, override `<ADAPTER_NAME>__skipped_test_sql(test_sql, kind, constraint_name)`. To add the feature to another database, implement `<ADAPTER_NAME>__adapter_enforced_constraint_types()` and the lookups `<ADAPTER_NAME>__lookup_enforced_unique_keys(table_relation)`, `<ADAPTER_NAME>__lookup_enforced_not_null_columns(table_relation)`, and `<ADAPTER_NAME>__lookup_enforced_foreign_keys(fk_relation, pk_relation)`. The PostgreSQL macros are an example.
 
 ## Advanced: `always_create_constraint` Property
 

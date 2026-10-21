@@ -346,3 +346,43 @@
     {%- do log("Skipping creation of indexes, they are not supported by Vertica", info=true) -%}
 
 {%- endmacro -%}
+
+
+
+{#- Vertica enforces NOT NULL, and enforces a primary or unique key only while
+    the key is ENABLED. It never enforces a foreign key (issue #114).
+    The Vertica lookups below have no integration test cell. -#}
+{%- macro vertica__adapter_enforced_constraint_types() -%}
+    {{ return(['not_null', 'primary_key', 'unique_key']) }}
+{%- endmacro -%}
+
+
+{#- Vertica checks the existing rows when a key becomes ENABLED, so an enabled
+    key holds for every row. -#}
+{%- macro vertica__lookup_enforced_unique_keys(table_relation) -%}
+    {%- set lookup_query -%}
+      select cc.constraint_name, cc.constraint_type, upper(cc.column_name) as column_name
+      from v_catalog.constraint_columns cc
+      join v_catalog.table_constraints tc on tc.constraint_id = cc.constraint_id
+      where cc.table_schema = '{{ table_relation.schema | replace("'", "''") }}'
+        and cc.table_name = '{{ table_relation.identifier | replace("'", "''") }}'
+        and cc.constraint_type in ('p', 'u')
+        and tc.is_enabled
+      order by cc.constraint_name
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(dbt_constraints.keys_from_lookup_rows(run_query(lookup_query))) }}
+{%- endmacro -%}
+
+
+{%- macro vertica__lookup_enforced_not_null_columns(table_relation) -%}
+    {%- set lookup_query -%}
+      select upper(column_name) as column_name
+      from v_catalog.columns
+      where table_schema = '{{ table_relation.schema | replace("'", "''") }}'
+        and table_name = '{{ table_relation.identifier | replace("'", "''") }}'
+        and not is_nullable
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(run_query(lookup_query).columns["column_name"].values() | map('upper') | list) }}
+{%- endmacro -%}

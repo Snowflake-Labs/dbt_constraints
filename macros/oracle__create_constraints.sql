@@ -344,3 +344,93 @@ END;
         {{ oracle__drop_referential_constraints(relation) }}
     {%- endfor -%}
 {% endmacro %}
+
+
+
+{#- Oracle enforces every constraint type (issue #114). -#}
+{%- macro oracle__adapter_enforced_constraint_types() -%}
+    {{ return(['not_null', 'primary_key', 'unique_key', 'foreign_key']) }}
+{%- endmacro -%}
+
+
+{#- These lookups return only constraints that are ENABLED and VALIDATED. An
+    ENABLE NOVALIDATE constraint does not qualify: rows that predate it can
+    violate it. RELY is not read, because RELY does not prove the data. A
+    deferrable constraint qualifies, because dbt commits the model before a
+    test runs. -#}
+{%- macro oracle__lookup_enforced_unique_keys(table_relation) -%}
+    {%- set lookup_query -%}
+select
+    cons.constraint_name as "constraint_name",
+    cons.constraint_type as "constraint_type",
+    upper(cols.column_name) as "column_name"
+from
+         all_constraints cons
+    join all_cons_columns cols on cons.constraint_name = cols.constraint_name
+                                  and cons.owner = cols.owner
+where
+    cons.constraint_type in ( 'P', 'U' )
+    and cons.status = 'ENABLED'
+    and cons.validated = 'VALIDATED'
+    and upper(cons.owner) = upper('{{ table_relation.schema | replace("'", "''") }}')
+    and upper(cons.table_name) = upper('{{ table_relation.identifier | replace("'", "''") }}')
+order by cons.constraint_name, cols.position
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(dbt_constraints.keys_from_lookup_rows(run_query(lookup_query))) }}
+{%- endmacro -%}
+
+
+{#- Oracle stores a NOT NULL as a check constraint with the condition
+    "COLUMN" IS NOT NULL. search_condition_vc needs Oracle 12.2 or later. The
+    columns of a validated primary key also reject NULL. -#}
+{%- macro oracle__lookup_enforced_not_null_columns(table_relation) -%}
+    {%- set lookup_query -%}
+select
+    upper(cols.column_name) as "column_name"
+from
+         all_constraints cons
+    join all_cons_columns cols on cons.constraint_name = cols.constraint_name
+                                  and cons.owner = cols.owner
+where
+    cons.status = 'ENABLED'
+    and cons.validated = 'VALIDATED'
+    and ( cons.constraint_type = 'P'
+          or ( cons.constraint_type = 'C'
+               and cons.search_condition_vc = '"' || cols.column_name || '" IS NOT NULL' ) )
+    and upper(cons.owner) = upper('{{ table_relation.schema | replace("'", "''") }}')
+    and upper(cons.table_name) = upper('{{ table_relation.identifier | replace("'", "''") }}')
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(run_query(lookup_query).columns["column_name"].values() | map('upper') | list) }}
+{%- endmacro -%}
+
+
+{%- macro oracle__lookup_enforced_foreign_keys(fk_relation, pk_relation) -%}
+    {%- set lookup_query -%}
+select
+    cons.constraint_name as "constraint_name",
+    upper(cols.column_name) as "column_name",
+    upper(pk_cols.column_name) as "pk_column_name"
+from
+         all_constraints cons
+    join all_cons_columns cols on cons.constraint_name = cols.constraint_name
+                                  and cons.owner = cols.owner
+    join all_constraints pk_cons on pk_cons.owner = cons.r_owner
+                                    and pk_cons.constraint_name = cons.r_constraint_name
+    join all_cons_columns pk_cols on pk_cols.owner = pk_cons.owner
+                                     and pk_cols.constraint_name = pk_cons.constraint_name
+                                     and pk_cols.position = cols.position
+where
+    cons.constraint_type = 'R'
+    and cons.status = 'ENABLED'
+    and cons.validated = 'VALIDATED'
+    and upper(cons.owner) = upper('{{ fk_relation.schema | replace("'", "''") }}')
+    and upper(cons.table_name) = upper('{{ fk_relation.identifier | replace("'", "''") }}')
+    and upper(pk_cons.owner) = upper('{{ pk_relation.schema | replace("'", "''") }}')
+    and upper(pk_cons.table_name) = upper('{{ pk_relation.identifier | replace("'", "''") }}')
+order by cons.constraint_name, cols.position
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(dbt_constraints.keys_from_lookup_rows(run_query(lookup_query))) }}
+{%- endmacro -%}
