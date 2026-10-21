@@ -310,9 +310,16 @@
 
 
 
-{#- PostgreSQL enforces every constraint type (issue #114). -#}
+{#- PostgreSQL enforces every constraint type (issue #114).
+    An adapter plugin that inherits from postgres (dbt-yellowbrick, dbt-materialize,
+    dbt-risingwave) also dispatches to this macro, but its database may not enforce
+    keys. Yellowbrick, for example, accepts keys and does not enforce them. Such a
+    plugin gets no skipped tests here. It can override this macro to opt in. -#}
 {%- macro postgres__adapter_enforced_constraint_types() -%}
-    {{ return(['not_null', 'primary_key', 'unique_key', 'foreign_key']) }}
+    {%- if target.type == 'postgres' -%}
+        {{ return(['not_null', 'primary_key', 'unique_key', 'foreign_key']) }}
+    {%- endif -%}
+    {{ return([]) }}
 {%- endmacro -%}
 
 
@@ -326,6 +333,9 @@
       parent reads the children, but the parent's constraint does not cover
       them. A partitioned table (relkind 'p') is safe, because its keys must
       include the partition key.
+    - A key is excluded when one of its columns shares an upper-case name with
+      another column of the table, such as "OrderKey" and orderkey. The tests
+      compare column names without case, so they cannot tell the two apart.
     A deferrable constraint qualifies. dbt commits the model before a test runs,
     and the database checks a deferred constraint at that commit. -#}
 {%- macro postgres__lookup_enforced_unique_keys(table_relation) -%}
@@ -348,6 +358,12 @@
         and i.indisvalid
         and (tbl.relkind = 'p'
             or not exists (select 1 from pg_inherits h where h.inhparent = tbl.oid))
+        and not exists (
+            select 1 from unnest(c.conkey) ck(attnum)
+            join pg_attribute x on x.attrelid = tbl.oid and x.attnum = ck.attnum
+            join pg_attribute y on y.attrelid = tbl.oid and y.attnum > 0
+                and not y.attisdropped and y.attnum <> x.attnum
+                and upper(y.attname) = upper(x.attname) )
     order by c.conname, k.ord
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
@@ -356,7 +372,9 @@
 
 
 {#- attnotnull is also true for a NOT VALID not-null constraint, which
-    PostgreSQL 18 stores as contype 'n'. Exclude a column that has one. -#}
+    PostgreSQL 18 stores as contype 'n'. Exclude a column that has one.
+    Also exclude a column that shares an upper-case name with another column.
+    A missing column only means its NOT NULL is not proven. -#}
 {%- macro postgres__lookup_enforced_not_null_columns(table_relation) -%}
     {%- set lookup_query -%}
     select upper(a.attname) as column_name
@@ -374,6 +392,11 @@
                 and n.contype = 'n'
                 and n.conkey = array[a.attnum]
                 and not n.convalidated )
+        and not exists (
+            select 1 from pg_attribute y
+            where y.attrelid = tbl.oid and y.attnum > 0
+                and not y.attisdropped and y.attnum <> a.attnum
+                and upper(y.attname) = upper(a.attname) )
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {{ return(run_query(lookup_query).columns["column_name"].values() | map('upper') | list) }}
@@ -402,6 +425,18 @@
         and coalesce((to_jsonb(c) ->> 'conenforced')::boolean, true)
         and (ct.relkind = 'p'
             or not exists (select 1 from pg_inherits h where h.inhparent = ct.oid))
+        and not exists (
+            select 1 from unnest(c.conkey) ck(attnum)
+            join pg_attribute x on x.attrelid = ct.oid and x.attnum = ck.attnum
+            join pg_attribute y on y.attrelid = ct.oid and y.attnum > 0
+                and not y.attisdropped and y.attnum <> x.attnum
+                and upper(y.attname) = upper(x.attname) )
+        and not exists (
+            select 1 from unnest(c.confkey) pk(attnum)
+            join pg_attribute x on x.attrelid = pt.oid and x.attnum = pk.attnum
+            join pg_attribute y on y.attrelid = pt.oid and y.attnum > 0
+                and not y.attisdropped and y.attnum <> x.attnum
+                and upper(y.attname) = upper(x.attname) )
     order by c.conname, k.ord
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}

@@ -41,6 +41,12 @@
     {%- do run_query("drop table if exists " ~ table_clone ~ " cascade") -%}
 {%- endmacro -%}
 
+{#- Vertica accepts the PostgreSQL syntax. CASCADE also drops the foreign keys of other
+   clones that refer to this clone. -#}
+{%- macro vertica__drop_cloned_table(table_clone) -%}
+    {%- do postgres__drop_cloned_table(table_clone) -%}
+{%- endmacro -%}
+
 {%- macro snowflake__drop_cloned_table(table_clone) -%}
     {#- Snowflake does not enforce constraints. A cascade is not necessary. The CTAS
        below replaces the clone. This macro does nothing. -#}
@@ -109,6 +115,12 @@ END;
     {%- do log("Creating table clone: " ~ table_clone, info=true) -%}
     {%- do run_query(clone_statement) -%}
 
+{%- endmacro -%}
+
+
+{#- Vertica accepts the PostgreSQL CTAS. -#}
+{%- macro vertica__clone_table(new_prefix) -%}
+    {%- do postgres__clone_table(new_prefix) -%}
 {%- endmacro -%}
 
 

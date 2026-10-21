@@ -191,7 +191,7 @@ Version 1.0.0 introduces a more advanced set of criteria for selecting tests to 
 * If source constraints are enabled, the source must be a table. You must also have the `OWNERSHIP` table privilege to add a constraint. For foreign keys you also need the `REFERENCES` privilege on the parent table with the primary or unique key. The package will identify when you lack these privileges on Snowflake and PostgreSQL. Oracle does not provide an easy way to look up your effective privileges so it has an exception handler and will display Oracle's error messages.
 * All columns on constraints must be individual column names, not expressions. You can reference columns on a model that come from an expression.
 * `primary_key`, `unique_key`, and `foreign_key` tests are considered first and duplicate constraints are skipped. One exception is that you will get an error if you add two different `primary_key` tests to the same model.
-* Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient.
+* Foreign keys require that the parent table have a primary key or unique key on the referenced columns. Unique keys generated from standard `unique` tests are sufficient. On Vertica, the parent needs a primary key: Vertica rejects a foreign key that references a unique key.
 * The order of columns on a foreign key test must match between the FK columns and PK columns
 * Referential constraints must apply to all the rows in a table so any tests with a `config: where:`, `config: warn_if:`, or `config: fail_calc:` property will be set as `NORELY` when creating constraints.
 
@@ -219,17 +219,19 @@ The package skips a test only when all of the following are true:
   | Database | Enforced constraints |
   | --- | --- |
   | PostgreSQL, Oracle | primary key, unique key, foreign key, not null |
-  | Vertica | primary key and unique key (when `ENABLED`), not null |
+  | Vertica | primary key and unique key (when `ENABLED`), not null. Vertica never enforces a foreign key. |
   | Snowflake, Redshift, BigQuery | not null only, so key tests never skip |
 
-* The database has validated the constraint. A constraint added `NOT VALID` or `NOT ENFORCED` on PostgreSQL, or `ENABLE NOVALIDATE` or `DISABLE` on Oracle, does not count. `RELY` does not count either, because it does not check the data. A deferrable constraint counts, because dbt commits the model before its tests run.
-* The constraint has exactly the test's columns. A foreign key must also reference the test's parent table, and pair the same child and parent columns.
+  Snowflake hybrid tables enforce primary, unique, and foreign keys, but the package does not detect hybrid tables, so their key tests still run. An adapter that inherits from dbt-postgres, such as Yellowbrick, Materialize, or RisingWave, never skips a test, because its database may not enforce keys. Such an adapter can override `<ADAPTER_NAME>__adapter_enforced_constraint_types()` to opt in. A database that connects with `type: postgres` is treated as PostgreSQL.
+
+* The database has validated the constraint. A constraint added `NOT VALID` or `NOT ENFORCED` on PostgreSQL, `ENABLE NOVALIDATE` or `DISABLE` on Oracle, or `DISABLED` on Vertica, does not count. `RELY` does not count either, because it does not check the data. A deferrable constraint counts, because dbt commits the model before its tests run. On Oracle, a primary or unique key also needs a usable index: a direct-path load that finds duplicates leaves the index `UNUSABLE` while the constraint stays `ENABLED VALIDATED`.
+* The constraint has exactly the test's columns. A foreign key must also reference the test's parent table, and pair the same child and parent columns. A constraint does not count when one of its columns shares a name, apart from case, with another column of the table, such as `"OrderKey"` and `orderkey`.
 * For a `unique_key` test, the key cannot hold repeated NULLs. A unique constraint allows them, but the test counts them as duplicates. So the key columns must each have a validated NOT NULL, or the constraint must be a primary key, or (PostgreSQL 15 and later) it must be `NULLS NOT DISTINCT`.
 * The test does not set a `where` config. Such a test reads a subquery, not the table.
 
-A table that dbt rebuilds in this run has no constraints when its tests run, because the package releases them first. So the skip applies to incremental models and snapshots on later runs, not to `table` models or a `--full-refresh`. Oracle needs version 12.2 or later. The Vertica lookups have no integration tests.
+A table that dbt rebuilds in this run has no constraints when its tests run, because the package releases them first. So the skip applies to incremental models and snapshots on later runs, not to `table` models or a `--full-refresh`. Oracle needs version 12.1 or later.
 
-To change the never-true form for a database, override `<ADAPTER_NAME>__skipped_test_sql(test_sql, kind, constraint_name)`. To add the feature to another database, implement `<ADAPTER_NAME>__adapter_enforced_constraint_types()` and the lookups `<ADAPTER_NAME>__lookup_enforced_unique_keys(table_relation)`, `<ADAPTER_NAME>__lookup_enforced_not_null_columns(table_relation)`, and `<ADAPTER_NAME>__lookup_enforced_foreign_keys(fk_relation, pk_relation)`. The PostgreSQL macros are an example.
+To change the never-true form for a database, override `<ADAPTER_NAME>__skipped_test_sql(test_sql, kind, constraint_name)`. Do not put `constraint_name` in the SQL text, because it comes from the catalog. To add the feature to another database, implement `<ADAPTER_NAME>__adapter_enforced_constraint_types()` and the lookups `<ADAPTER_NAME>__lookup_enforced_unique_keys(table_relation)`, `<ADAPTER_NAME>__lookup_enforced_not_null_columns(table_relation)`, and `<ADAPTER_NAME>__lookup_enforced_foreign_keys(fk_relation, pk_relation)`. The PostgreSQL macros are an example.
 
 ## Advanced: `always_create_constraint` Property
 

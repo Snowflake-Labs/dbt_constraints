@@ -1,5 +1,7 @@
-{#- Snowflake enforces only NOT NULL. Its primary, unique and foreign keys are not
-    enforced, so their tests never skip (issue #114). -#}
+{#- Snowflake standard tables enforce only NOT NULL. Their primary, unique and
+    foreign keys are not enforced, so their tests never skip (issue #114).
+    Hybrid tables do enforce keys, but the package does not detect a hybrid
+    table, so its key tests still run. -#}
 {%- macro snowflake__adapter_enforced_constraint_types() -%}
     {{ return(['not_null']) }}
 {%- endmacro -%}

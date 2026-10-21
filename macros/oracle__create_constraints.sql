@@ -357,7 +357,50 @@ END;
     ENABLE NOVALIDATE constraint does not qualify: rows that predate it can
     violate it. RELY is not read, because RELY does not prove the data. A
     deferrable constraint qualifies, because dbt commits the model before a
-    test runs. -#}
+    test runs.
+    - invalid is null excludes a constraint that Oracle marked INVALID.
+    - A primary or unique key also needs a usable index. A direct-path load that
+      finds duplicates leaves the index UNUSABLE, and the constraint stays
+      ENABLED VALIDATED over the duplicate rows. ALL_INDEXES shows N/A for a
+      partitioned index, so each partition and subpartition is checked too.
+    - Owner and table names are compared exactly, so "orders" and ORDERS stay
+      apart. oracle__catalog_name gives the name as the catalog stores it.
+    - A key is excluded when one of its columns shares an upper-case name with
+      another column of the table. The tests compare column names without case. -#}
+
+{#- Return a relation part as Oracle stores it in the catalog: as written when
+    the part is quoted, else in upper case. The result is a SQL string literal. -#}
+{%- macro oracle__catalog_name(relation, part) -%}
+    {%- set name = relation.schema if part == 'schema' else relation.identifier -%}
+    {%- set quoted = relation.quote_policy.schema if part == 'schema' else relation.quote_policy.identifier -%}
+    {%- set catalog_name = name if quoted else name | upper -%}
+    {{ return("'" ~ catalog_name | replace("'", "''") ~ "'") }}
+{%- endmacro -%}
+
+{#- SQL that is true when the index behind constraint alias `cons` is usable. -#}
+{%- macro oracle__usable_index_condition(cons) -%}
+    {{ cons }}.index_name is not null
+    and exists ( select 1 from all_indexes ix
+                 where ix.owner = {{ cons }}.index_owner and ix.index_name = {{ cons }}.index_name
+                   and ix.status in ( 'VALID', 'N/A' ) )
+    and not exists ( select 1 from all_ind_partitions ip
+                     where ip.index_owner = {{ cons }}.index_owner and ip.index_name = {{ cons }}.index_name
+                       and ip.status not in ( 'USABLE', 'N/A' ) )
+    and not exists ( select 1 from all_ind_subpartitions isp
+                     where isp.index_owner = {{ cons }}.index_owner and isp.index_name = {{ cons }}.index_name
+                       and isp.status <> 'USABLE' )
+{%- endmacro -%}
+
+{#- SQL that is true when no column of constraint alias `cons` shares an upper-case
+    name with another column of its table. -#}
+{%- macro oracle__no_column_collision_condition(cons) -%}
+    not exists ( select 1 from all_cons_columns kc
+                 join all_tab_columns tc2 on tc2.owner = kc.owner and tc2.table_name = kc.table_name
+                                         and tc2.column_name <> kc.column_name
+                                         and upper(tc2.column_name) = upper(kc.column_name)
+                 where kc.owner = {{ cons }}.owner and kc.constraint_name = {{ cons }}.constraint_name )
+{%- endmacro -%}
+
 {%- macro oracle__lookup_enforced_unique_keys(table_relation) -%}
     {%- set lookup_query -%}
 select
@@ -372,8 +415,11 @@ where
     cons.constraint_type in ( 'P', 'U' )
     and cons.status = 'ENABLED'
     and cons.validated = 'VALIDATED'
-    and upper(cons.owner) = upper('{{ table_relation.schema | replace("'", "''") }}')
-    and upper(cons.table_name) = upper('{{ table_relation.identifier | replace("'", "''") }}')
+    and cons.invalid is null
+    and cons.owner = {{ dbt_constraints.oracle__catalog_name(table_relation, 'schema') }}
+    and cons.table_name = {{ dbt_constraints.oracle__catalog_name(table_relation, 'identifier') }}
+    and {{ dbt_constraints.oracle__usable_index_condition('cons') }}
+    and {{ dbt_constraints.oracle__no_column_collision_condition('cons') }}
 order by cons.constraint_name, cols.position
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
@@ -382,8 +428,10 @@ order by cons.constraint_name, cols.position
 
 
 {#- Oracle stores a NOT NULL as a check constraint with the condition
-    "COLUMN" IS NOT NULL. search_condition_vc needs Oracle 12.2 or later. The
-    columns of a validated primary key also reject NULL. -#}
+    "COLUMN" IS NOT NULL. search_condition_vc needs Oracle 12.1 or later. The
+    columns of a validated primary key with a usable index also reject NULL.
+    A column that shares an upper-case name with another column is left out. A
+    missing column only means its NOT NULL is not proven. -#}
 {%- macro oracle__lookup_enforced_not_null_columns(table_relation) -%}
     {%- set lookup_query -%}
 select
@@ -395,11 +443,17 @@ from
 where
     cons.status = 'ENABLED'
     and cons.validated = 'VALIDATED'
-    and ( cons.constraint_type = 'P'
+    and cons.invalid is null
+    and ( ( cons.constraint_type = 'P'
+            and {{ dbt_constraints.oracle__usable_index_condition('cons') }} )
           or ( cons.constraint_type = 'C'
                and cons.search_condition_vc = '"' || cols.column_name || '" IS NOT NULL' ) )
-    and upper(cons.owner) = upper('{{ table_relation.schema | replace("'", "''") }}')
-    and upper(cons.table_name) = upper('{{ table_relation.identifier | replace("'", "''") }}')
+    and cons.owner = {{ dbt_constraints.oracle__catalog_name(table_relation, 'schema') }}
+    and cons.table_name = {{ dbt_constraints.oracle__catalog_name(table_relation, 'identifier') }}
+    and not exists ( select 1 from all_tab_columns tc2
+                     where tc2.owner = cols.owner and tc2.table_name = cols.table_name
+                       and tc2.column_name <> cols.column_name
+                       and upper(tc2.column_name) = upper(cols.column_name) )
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}
     {{ return(run_query(lookup_query).columns["column_name"].values() | map('upper') | list) }}
@@ -425,10 +479,13 @@ where
     cons.constraint_type = 'R'
     and cons.status = 'ENABLED'
     and cons.validated = 'VALIDATED'
-    and upper(cons.owner) = upper('{{ fk_relation.schema | replace("'", "''") }}')
-    and upper(cons.table_name) = upper('{{ fk_relation.identifier | replace("'", "''") }}')
-    and upper(pk_cons.owner) = upper('{{ pk_relation.schema | replace("'", "''") }}')
-    and upper(pk_cons.table_name) = upper('{{ pk_relation.identifier | replace("'", "''") }}')
+    and cons.invalid is null
+    and cons.owner = {{ dbt_constraints.oracle__catalog_name(fk_relation, 'schema') }}
+    and cons.table_name = {{ dbt_constraints.oracle__catalog_name(fk_relation, 'identifier') }}
+    and pk_cons.owner = {{ dbt_constraints.oracle__catalog_name(pk_relation, 'schema') }}
+    and pk_cons.table_name = {{ dbt_constraints.oracle__catalog_name(pk_relation, 'identifier') }}
+    and {{ dbt_constraints.oracle__no_column_collision_condition('cons') }}
+    and {{ dbt_constraints.oracle__no_column_collision_condition('pk_cons') }}
 order by cons.constraint_name, cols.position
     {%- endset -%}
     {%- do log("Lookup: " ~ lookup_query, info=false) -%}

@@ -23,6 +23,17 @@ dbt_constraints:
       threads: 64
       protocol: tcp
 
+    vertica:
+      type: vertica
+      host: "{{ env_var('VERTICA_HOST', 'localhost') }}"
+      port: "{{ env_var('VERTICA_PORT', '5433') | as_number }}"
+      username: "{{ env_var('VERTICA_USER', 'dbt_test') }}"
+      password: "{{ env_var('VERTICA_PASSWORD', 'testpass123') }}"
+      database: "{{ env_var('VERTICA_DB', 'dbt_test') }}"
+      schema: dbt_constraints_test
+      # Vertica accepts 50 client sessions by default (MaxClientSessions).
+      threads: 32
+
     sqlserver:
       type: sqlserver
       host: "{{ env_var('SQLSERVER_HOST', 'localhost') }}"

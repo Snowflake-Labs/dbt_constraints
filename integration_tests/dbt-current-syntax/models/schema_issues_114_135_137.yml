@@ -5,7 +5,8 @@ models:
   # model's test runs (see macros/stage_enforced_constraint.sql). With
   # dbt_constraints_skip_tests_if_enforced on, a test backed by a validated,
   # enforced constraint takes the never-true form. A test whose constraint does
-  # not prove it must still run. Only PostgreSQL and Oracle add the constraints.
+  # not prove it must still run. Only PostgreSQL, Oracle and Vertica add the
+  # constraints.
   # See: https://github.com/Snowflake-Labs/dbt_constraints/issues/114
   - name: dim_issue_114_pk_validated
     description: "Validated primary key, so the primary_key test is skipped."
@@ -56,6 +57,76 @@ models:
             fk_column_names: [o_orderkey]
             pk_table_name: ref('dim_issue_114_pk_validated')
             pk_column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_uk_not_null
+    description: "Unique key on a NOT NULL column, so both key tests are skipped."
+    data_tests:
+      - dbt_constraints.unique_key:
+          arguments:
+            column_names: [o_orderkey]
+          config:
+            severity: warn
+      - dbt_constraints.primary_key:
+          arguments:
+            column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_uk_nnd
+    description: "UNIQUE NULLS NOT DISTINCT on PostgreSQL, so the test is skipped there."
+    data_tests:
+      - dbt_constraints.unique_key:
+          arguments:
+            column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_pk_unusable
+    description: "Primary key with an UNUSABLE index on Oracle, so the test runs there."
+    data_tests:
+      - dbt_constraints.primary_key:
+          arguments:
+            column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_pk_not_validated
+    description: "Unvalidated primary key, so the test runs."
+    data_tests:
+      - dbt_constraints.primary_key:
+          arguments:
+            column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_fk_parent2
+    description: "Composite primary key, the parent of fact_issue_114_fk_crossed."
+    data_tests:
+      - dbt_constraints.primary_key:
+          arguments:
+            column_names: [k1, k2]
+          config:
+            severity: warn
+
+  - name: fact_issue_114_fk_crossed
+    description: "Foreign key on (c1, c2) to (k1, k2); the test pairs them crossed, so it runs and warns."
+    data_tests:
+      - dbt_constraints.foreign_key:
+          arguments:
+            fk_column_names: [c1, c2]
+            pk_table_name: ref('dim_issue_114_fk_parent2')
+            pk_column_names: [k2, k1]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_case_collision
+    description: "Primary key on \"OrderKey\", test on orderkey, so the test runs and warns."
+    data_tests:
+      - dbt_constraints.unique_key:
+          arguments:
+            column_names: [orderkey]
           config:
             severity: warn
 

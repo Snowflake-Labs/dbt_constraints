@@ -61,6 +61,9 @@ vars:
 # FK-linked clones, which deadlocked on PostgreSQL.
 on-run-start:
   - "{{ drop_cloned_tables('source_') }}"
+  # Issue #114: check the matching code of the enforced-constraint skip on every
+  # target. See macros/issue_114/assert_enforced_constraint_matching.sql.
+  - "{{ assert_enforced_constraint_matching() }}"
 
 models:
   +materialized: table
