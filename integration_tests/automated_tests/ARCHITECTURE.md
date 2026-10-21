@@ -39,7 +39,10 @@ automated_tests/
 │   ├── test_fusion_compatibility.py
 │   ├── test_issue_105.py           # Issue tests
 │   ├── test_issue_110.py
-│   └── test_issue_127.py           # Quoted constraint names, reads baseline_build
+│   ├── test_issue_114.py           # Skip tests an enforced constraint proves, reads baseline_build
+│   ├── test_issue_127.py           # Quoted constraint names, reads baseline_build
+│   ├── test_issue_135.py           # Per-test quote_columns at creation, reads baseline_build
+│   └── test_issue_137.py           # Either enabled flag set to false, reads baseline_build
 ├── .dpos-stage/                    # Generated. Deployable copies, gitignored
 ├── conftest.py                     # Pytest fixtures and the runner dispatch
 ├── dbt_venv.py                     # Per-cell uv virtual environments
