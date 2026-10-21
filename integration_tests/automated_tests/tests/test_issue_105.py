@@ -98,7 +98,7 @@ def assert_no_bug_symptoms(baseline_build: str) -> None:
 
 
 def _skip_single_database_adapters(target: str) -> None:
-    if target in ("oracle", "postgres"):
+    if target in ("oracle", "postgres", "vertica"):
         pytest.skip(f"Custom database not supported on {target}")
 
 
@@ -183,7 +183,7 @@ def test_issue_105_regression(baseline_build, target):
     assert_no_bug_symptoms(baseline_build)
 
     scenarios = ["custom_schema", "custom_alias"]
-    if target not in ("oracle", "postgres"):
+    if target not in ("oracle", "postgres", "vertica"):
         scenarios += ["custom_database", "all_custom"]
 
     for scenario in scenarios:

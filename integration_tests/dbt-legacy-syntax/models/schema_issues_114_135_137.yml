@@ -1,0 +1,152 @@
+version: 2
+
+models:
+  # Issue #114 regression. Each post-hook adds an enforced constraint before the
+  # model's test runs (see macros/stage_enforced_constraint.sql). With
+  # dbt_constraints_skip_tests_if_enforced on, a test backed by a validated,
+  # enforced constraint takes the never-true form. A test whose constraint does
+  # not prove it must still run. Only PostgreSQL, Oracle and Vertica add the
+  # constraints.
+  # See: https://github.com/Snowflake-Labs/dbt_constraints/issues/114
+  - name: dim_issue_114_pk_validated
+    description: "Validated primary key, so the primary_key test is skipped."
+    columns:
+      - name: o_orderkey
+        description: "Primary key"
+    tests:
+      - dbt_constraints.primary_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_uk_nullable
+    description: "Unique constraint on a nullable key with two NULL rows, so the test runs and warns."
+    columns:
+      - name: o_orderkey
+        description: "Unique, but NULL twice"
+    tests:
+      - dbt_constraints.unique_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: fact_issue_114_fk_validated
+    description: "Validated foreign key, so the foreign_key test is skipped."
+    columns:
+      - name: o_orderkey
+        description: "References dim_issue_114_pk_validated"
+    tests:
+      - dbt_constraints.foreign_key:
+          fk_column_names: [o_orderkey]
+          pk_table_name: ref('dim_issue_114_pk_validated')
+          pk_column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: fact_issue_114_fk_not_validated
+    description: "Unvalidated foreign key over an orphan row, so the test runs and warns."
+    columns:
+      - name: o_orderkey
+        description: "References dim_issue_114_pk_validated, with one orphan"
+    tests:
+      - dbt_constraints.foreign_key:
+          fk_column_names: [o_orderkey]
+          pk_table_name: ref('dim_issue_114_pk_validated')
+          pk_column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_uk_not_null
+    description: "Unique key on a NOT NULL column, so both key tests are skipped."
+    tests:
+      - dbt_constraints.unique_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+      - dbt_constraints.primary_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_uk_nnd
+    description: "UNIQUE NULLS NOT DISTINCT on PostgreSQL, so the test is skipped there."
+    tests:
+      - dbt_constraints.unique_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_pk_unusable
+    description: "Primary key with an UNUSABLE index on Oracle, so the test runs there."
+    tests:
+      - dbt_constraints.primary_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_pk_not_validated
+    description: "Unvalidated primary key, so the test runs."
+    tests:
+      - dbt_constraints.primary_key:
+          column_names: [o_orderkey]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_fk_parent2
+    description: "Composite primary key, the parent of fact_issue_114_fk_crossed."
+    tests:
+      - dbt_constraints.primary_key:
+          column_names: [k1, k2]
+          config:
+            severity: warn
+
+  - name: fact_issue_114_fk_crossed
+    description: "Foreign key on (c1, c2) to (k1, k2); the test pairs them crossed, so it runs and warns."
+    tests:
+      - dbt_constraints.foreign_key:
+          fk_column_names: [c1, c2]
+          pk_table_name: ref('dim_issue_114_fk_parent2')
+          pk_column_names: [k2, k1]
+          config:
+            severity: warn
+
+  - name: dim_issue_114_case_collision
+    description: "Primary key on \"OrderKey\", test on orderkey, so the test runs and warns."
+    tests:
+      - dbt_constraints.unique_key:
+          column_names: [orderkey]
+          config:
+            severity: warn
+
+  # Issue #135 regression. The test sets quote_columns, and the hook does not.
+  # See: https://github.com/Snowflake-Labs/dbt_constraints/pull/135
+  - name: dim_issue_135_mixed_case
+    description: "Mixed-case column that exists only as a quoted identifier."
+    columns:
+      - name: OrderKey
+        description: "Primary key"
+        quote: true
+    tests:
+      - dbt_constraints.primary_key:
+          column_names: [OrderKey]
+          quote_columns: true
+          constraint_name: I135_MIXED_PK
+
+  # Issue #137 regression. The test sets dbt_constraints_enabled: false in
+  # config.meta only, and config leaves the flag unset. Before the fix, the
+  # unset flag defaulted to true and the package created the constraint.
+  # The same flag directly under config is not tested: dbt Fusion rejects an
+  # unknown test config key (dbt1060), and dbt-core 1.5 drops it.
+  # See: https://github.com/Snowflake-Labs/dbt_constraints/issues/137
+  - name: dim_issue_137_meta_off
+    description: "The test turns constraints off in config.meta."
+    columns:
+      - name: o_orderkey
+        description: "Unique"
+    tests:
+      - dbt_constraints.unique_key:
+          column_names: [o_orderkey]
+          constraint_name: I137_META_OFF_UK
+          config:
+            meta:
+              dbt_constraints_enabled: false

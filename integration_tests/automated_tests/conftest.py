@@ -137,7 +137,7 @@ def pytest_addoption(parser):
         "--database",
         action="store",
         default=None,
-        help="Test specific database: postgres, oracle, sqlserver",
+        help="Test specific database: postgres, oracle, vertica, sqlserver",
     )
     parser.addoption(
         "--dbt-version",
@@ -272,6 +272,14 @@ def db_connection_config() -> dict[str, dict[str, str]]:
             "service": "FREEPDB1",  # Oracle service name (not random)
             "database": "FREEPDB1",  # Oracle database name (not random)
         },
+        # The Vertica entrypoint puts each password into vsql arguments and SQL
+        # literals without quoting. Hex passwords contain no shell or SQL characters.
+        "vertica": {
+            "user": generate_db_identifier("dbtusr"),
+            "password": secrets.token_hex(12),
+            "dbadmin_password": secrets.token_hex(12),
+            "database": "dbt_test",  # Set by the image (VERTICA_DB_NAME)
+        },
         "sqlserver": {
             "user": "sa",  # SQL Server requires 'sa' user
             "password": generate_secure_password(
@@ -351,6 +359,7 @@ def database_compose_files(request) -> dict[str, list[str]]:
     return {
         "postgres": [str(COMPOSE_DIR / "postgres-db.yml")],
         "oracle": [str(COMPOSE_DIR / "oracle-db.yml")],
+        "vertica": [str(COMPOSE_DIR / "vertica-db.yml")],
         # sqlserver is not in the matrix: the package has no SQL Server
         # implementation, so its constraint hook fails at macro dispatch.
         # snowflake: no local database needed (cloud service)
@@ -411,6 +420,15 @@ def setup_database_env(db_connection_config):
             original_env["ORACLE_PASSWORD"] = os.environ.get("ORACLE_PASSWORD")
             os.environ["ORACLE_USER"] = creds["user"]
             os.environ["ORACLE_PASSWORD"] = creds["password"]
+        elif db == "vertica":
+            env_values = {
+                "VERTICA_USER": creds["user"],
+                "VERTICA_PASSWORD": creds["password"],
+                "VERTICA_DBADMIN_PASSWORD": creds["dbadmin_password"],
+            }
+            for key, value in env_values.items():
+                original_env[key] = os.environ.get(key)
+                os.environ[key] = value
         elif db == "sqlserver":
             original_env["SQLSERVER_PASSWORD"] = os.environ.get("SQLSERVER_PASSWORD")
             os.environ["SQLSERVER_PASSWORD"] = creds["password"]
@@ -593,7 +611,7 @@ def dbt_env(
     # The database containers publish their ports to the host. profiles.yml uses
     # localhost as the default host. Remove each container hostname from the
     # environment. This prevents an old value from the caller.
-    for stale in ("POSTGRES_HOST", "ORACLE_HOST", "SQLSERVER_HOST"):
+    for stale in ("POSTGRES_HOST", "ORACLE_HOST", "VERTICA_HOST", "SQLSERVER_HOST"):
         env.pop(stale, None)
 
     # A container did not read the shell of the developer. The host does. Remove the
@@ -618,6 +636,14 @@ def dbt_env(
                     "ORACLE_PASSWORD": creds["password"],
                     "ORACLE_SERVICE": creds["service"],
                     "ORACLE_DATABASE": creds["database"],
+                }
+            )
+        elif database == "vertica":
+            env.update(
+                {
+                    "VERTICA_USER": creds["user"],
+                    "VERTICA_PASSWORD": creds["password"],
+                    "VERTICA_DB": creds["database"],
                 }
             )
         elif database == "sqlserver":

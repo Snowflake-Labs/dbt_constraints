@@ -25,7 +25,7 @@ pytest --fast --database postgres --dbt-version 1.11.14
 
 ## How It Works
 
-- **Database containers** start once per session (PostgreSQL, Oracle, SQL Server)
+- **Database containers** start once per session (PostgreSQL, Oracle, Vertica)
 - **dbt runner containers** are created per test with specific versions
 - **Tests** are automatically parameterized from `config/test-versions.json`
 - **Credentials** are randomly generated per session for security
@@ -121,7 +121,7 @@ The snowflake cells align with the versions dbt Projects on Snowflake (DPOS) sup
 - Reference doc: https://docs.snowflake.com/en/user-guide/data-engineering/dbt-projects-on-snowflake-dbt-core-versions
 - 1.5.12 and 1.8.10 are the legacy floor. 1.12.3 is the newest dbt Labs release.
 - Where a Snowflake-supported patch exists for a minor, use it instead of that minor's newest patch. Testing what Snowflake actually runs is the point.
-- DPOS applies to the snowflake adapter only. postgres, oracle and sqlserver track dbt Labs releases. Adapter availability caps them: dbt-postgres tops out at 1.11.0 and dbt-sqlserver at 1.11.1. Neither can test 1.12.x. dbt-oracle reaches 1.12.0.
+- DPOS applies to the snowflake adapter only. postgres, oracle, vertica and sqlserver track dbt Labs releases. Adapter availability caps them: dbt-postgres tops out at 1.11.0 and dbt-sqlserver at 1.11.1. Neither can test 1.12.x. dbt-oracle and dbt-vertica reach 1.12.0.
 
 ## Known Gaps
 
@@ -208,6 +208,7 @@ Database containers use healthchecks. Check logs:
 ```bash
 docker logs dbt-test-db-postgres
 docker logs dbt-test-db-oracle
+docker logs dbt-test-db-vertica
 docker logs dbt-test-db-sqlserver
 ```
 
@@ -218,6 +219,7 @@ Clean up all containers:
 ```bash
 docker compose -f docker/compose/postgres-db.yml -p dbt-test-db down -v
 docker compose -f docker/compose/oracle-db.yml -p dbt-test-db down -v
+docker compose -f docker/compose/vertica-db.yml -p dbt-test-db down -v
 docker compose -f docker/compose/sqlserver-db.yml -p dbt-test-db down -v
 ```
 

@@ -51,11 +51,19 @@ vars:
   # Enable this parameter if you want to skip using RELY for join elimination
   dbt_constraints_always_norely: false
 
+  # Skip a primary, unique or foreign key test when the database enforces a
+  # validated constraint that proves it. Only the issue #114 models have such a
+  # constraint when their tests run, because a full build releases the others.
+  dbt_constraints_skip_tests_if_enforced: true
+
 # Drop the source_ clones in one single-threaded pass before the seeds run. Doing this
 # in the per-seed post-hook ran concurrent `drop ... cascade` statements against
 # FK-linked clones, which deadlocked on PostgreSQL.
 on-run-start:
   - "{{ drop_cloned_tables('source_') }}"
+  # Issue #114: check the matching code of the enforced-constraint skip on every
+  # target. See macros/issue_114/assert_enforced_constraint_matching.sql.
+  - "{{ assert_enforced_constraint_matching() }}"
 
 models:
   +materialized: table

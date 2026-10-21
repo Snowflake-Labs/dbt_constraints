@@ -61,8 +61,9 @@
     {%- set constraint_name = dbt_constraints.sanitize_constraint_name((constraint_name or fk_table_relation.identifier ~ "_" ~ fk_column_names|join('_') ~ "_FK")) -%}
     {%- set fk_columns_csv = dbt_constraints.get_quoted_column_csv(fk_column_names, quote_columns) -%}
     {%- set pk_columns_csv = dbt_constraints.get_quoted_column_csv(pk_column_names, quote_columns) -%}
-    {#- Check that the PK table has a PK or UK -#}
-    {%- if dbt_constraints.unique_constraint_exists(pk_table_relation, pk_column_names, lookup_cache) -%}
+    {#- Vertica accepts a foreign key only when it references a primary key. A unique key
+       is not enough: ADD CONSTRAINT then fails with error 4550. -#}
+    {%- if dbt_constraints.vertica__primary_key_exists(pk_table_relation, pk_column_names) -%}
         {#- Check if the table already has this foreign key -#}
         {%- if not dbt_constraints.foreign_key_exists(fk_table_relation, fk_column_names, lookup_cache) -%}
 
@@ -84,8 +85,25 @@
             {%- do log("Skipping " ~ constraint_name ~ " because FK already exists: " ~ fk_table_relation ~ " " ~ fk_column_names, info=false) -%}
         {%- endif -%}
     {%- else -%}
-        {%- do log("Skipping " ~ constraint_name ~ " because a PK/UK was not found on the PK table: " ~ pk_table_relation ~ " " ~ pk_column_names, info=true) -%}
+        {%- do log("Skipping " ~ constraint_name ~ " because a PK was not found on the PK table (Vertica cannot reference a UK): " ~ pk_table_relation ~ " " ~ pk_column_names, info=true) -%}
     {%- endif -%}
+{%- endmacro -%}
+
+
+
+{#- Return true when table_relation has a primary key on exactly column_names.
+   This reads the catalog for each foreign key and does not use lookup_cache, because
+   lookup_cache.unique_keys holds primary keys and unique keys together. -#}
+{%- macro vertica__primary_key_exists(table_relation, column_names) -%}
+    {%- set lookup_query -%}
+      select constraint_name, column_name
+      from v_catalog.constraint_columns
+      where lower(table_schema) = lower('{{ table_relation.schema | replace("'", "''") }}')
+        and lower(table_name) = lower('{{ table_relation.identifier | replace("'", "''") }}')
+        and constraint_type = 'p'
+    {%- endset -%}
+    {%- set columns = run_query(lookup_query).columns["column_name"].values() | list -%}
+    {{ return(dbt_constraints.column_list_matches(columns, column_names)) }}
 {%- endmacro -%}
 
 
@@ -282,17 +300,37 @@
 
 
 
+{#- Vertica has no information_schema and no is_role_in_session(). The owner of a table
+   is in v_catalog.tables and gets no row in v_catalog.grants. A grant to a role the user
+   holds is a v_catalog.grants row with object_type 'ROLE'. has_table_privilege() cannot
+   replace this query: it is a meta-function that takes no per-row arguments.
+   Limit: the query follows one level of role grants. A role granted through another role
+   is not found, and a superuser gets no implicit privileges. v_catalog.grants shows the
+   grants of a role only while the role is enabled in the session, as is_role_in_session()
+   does on PostgreSQL. A user can set verify_permissions to false, or the query can walk
+   v_catalog.grants recursively. -#}
 {%- macro vertica__lookup_table_privileges(table_relation, lookup_cache) -%}
 
     {%- if table_relation.database not in lookup_cache.table_privileges -%}
         {%- set lookup_query -%}
-            select distinct
-              upper(tp.table_schema) as "table_schema",
-              upper(tp.table_name) as "table_name",
-              tp.privilege_type as "privilege_type"
-            from {{table_relation.database}}.information_schema.table_privileges tp
-            where is_role_in_session(tp.grantee)
-              and tp.privilege_type in ('OWNERSHIP', 'REFERENCES')
+            select upper(t.table_schema) as "table_schema",
+              upper(t.table_name) as "table_name",
+              'OWNERSHIP' as "privilege_type"
+            from v_catalog.tables t
+            where t.owner_name = current_user()
+            union
+            select upper(g.object_schema),
+              upper(g.object_name),
+              'REFERENCES'
+            from v_catalog.grants g
+            where g.object_type = 'TABLE'
+              and g.privileges_description ilike '%REFERENCES%'
+              and (g.grantee = current_user()
+                or g.grantee = 'public'
+                or g.grantee in (select r.object_name
+                  from v_catalog.grants r
+                  where r.object_type = 'ROLE'
+                    and r.grantee = current_user()))
         {%- endset -%}
         {%- do log("Caching privileges for database: " ~ table_relation.database, info=false) -%}
         {%- set privilege_list = run_query(lookup_query) -%}
@@ -345,4 +383,46 @@
 
     {%- do log("Skipping creation of indexes, they are not supported by Vertica", info=true) -%}
 
+{%- endmacro -%}
+
+
+
+{#- Vertica enforces NOT NULL, and enforces a primary or unique key only while
+    the key is ENABLED. It never enforces a foreign key (issue #114). -#}
+{%- macro vertica__adapter_enforced_constraint_types() -%}
+    {{ return(['not_null', 'primary_key', 'unique_key']) }}
+{%- endmacro -%}
+
+
+{#- Vertica checks the existing rows when a key becomes ENABLED, so an enabled
+    key holds for every row. A unique key allows repeated NULLs.
+    The catalog keeps the case of a name as it was created, and = compares with
+    case, but Vertica identifiers are case-insensitive. So the names are compared
+    in lower case. Two columns whose names differ only in case cannot exist on a
+    table, so these lookups need no case-collision guard. -#}
+{%- macro vertica__lookup_enforced_unique_keys(table_relation) -%}
+    {%- set lookup_query -%}
+      select cc.constraint_name, cc.constraint_type, upper(cc.column_name) as column_name
+      from v_catalog.constraint_columns cc
+      where lower(cc.table_schema) = lower('{{ table_relation.schema | replace("'", "''") }}')
+        and lower(cc.table_name) = lower('{{ table_relation.identifier | replace("'", "''") }}')
+        and cc.constraint_type in ('p', 'u')
+        and cc.is_enabled
+      order by cc.constraint_name
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(dbt_constraints.keys_from_lookup_rows(run_query(lookup_query))) }}
+{%- endmacro -%}
+
+
+{%- macro vertica__lookup_enforced_not_null_columns(table_relation) -%}
+    {%- set lookup_query -%}
+      select upper(column_name) as column_name
+      from v_catalog.columns
+      where lower(table_schema) = lower('{{ table_relation.schema | replace("'", "''") }}')
+        and lower(table_name) = lower('{{ table_relation.identifier | replace("'", "''") }}')
+        and not is_nullable
+    {%- endset -%}
+    {%- do log("Lookup: " ~ lookup_query, info=false) -%}
+    {{ return(run_query(lookup_query).columns["column_name"].values() | map('upper') | list) }}
 {%- endmacro -%}

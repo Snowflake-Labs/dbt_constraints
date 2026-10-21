@@ -1,3 +1,12 @@
+{#- Snowflake standard tables enforce only NOT NULL. Their primary, unique and
+    foreign keys are not enforced, so their tests never skip (issue #114).
+    Hybrid tables do enforce keys, but the package does not detect a hybrid
+    table, so its key tests still run. -#}
+{%- macro snowflake__adapter_enforced_constraint_types() -%}
+    {{ return(['not_null']) }}
+{%- endmacro -%}
+
+
 {#- Snowflake supports RELY and NORELY constraints for PK, UK, FK but not not_null -#}
 {%- macro snowflake__adapter_supports_rely_norely(test_name) -%}
     {%- if test_name in (

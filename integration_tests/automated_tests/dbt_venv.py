@@ -29,6 +29,7 @@ PYTHON_VERSION = "3.11"
 ADAPTER_PACKAGES = {
     "postgres": "dbt-postgres",
     "oracle": "dbt-oracle",
+    "vertica": "dbt-vertica",
     "sqlserver": "dbt-sqlserver",
     "snowflake": "dbt-snowflake",
 }

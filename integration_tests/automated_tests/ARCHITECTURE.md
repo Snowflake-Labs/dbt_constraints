@@ -39,7 +39,10 @@ automated_tests/
 │   ├── test_fusion_compatibility.py
 │   ├── test_issue_105.py           # Issue tests
 │   ├── test_issue_110.py
-│   └── test_issue_127.py           # Quoted constraint names, reads baseline_build
+│   ├── test_issue_114.py           # Skip tests an enforced constraint proves, plus the matcher hook; reads baseline_build
+│   ├── test_issue_127.py           # Quoted constraint names, reads baseline_build
+│   ├── test_issue_135.py           # Per-test quote_columns at creation, reads baseline_build
+│   └── test_issue_137.py           # Either enabled flag set to false, reads baseline_build
 ├── .dpos-stage/                    # Generated. Deployable copies, gitignored
 ├── conftest.py                     # Pytest fixtures and the runner dispatch
 ├── dbt_venv.py                     # Per-cell uv virtual environments
@@ -371,42 +374,22 @@ supports.
 
 ### New Database
 
-1. **Create compose files**:
+The dbt client runs in a uv venv on the host (`dbt_venv.py`). Only the database runs in
+a container. Use the `vertica` cell as the model.
 
-   ```yaml
-   # docker/compose/newdb-db.yml
-   services:
-     newdb:
-       image: newdb:latest
-       healthcheck: ...
-
-   # docker/compose/newdb-runner.yml
-   services:
-     dbt-newdb:
-       build:
-         args:
-           DBT_ADAPTER: newdb
-   ```
-
-2. **Update conftest.py**:
-
-   ```python
-   def database_compose_files(request):
-       return {
-           ...
-           "newdb": [str(COMPOSE_DIR / "newdb-db.yml")],
-       }
-   ```
-
-3. **Update config**:
-
-   ```json
-   {
-     "dbt_versions": {
-       "newdb": ["1.11.14"]
-     }
-   }
-   ```
+1. **Add a compose file** `docker/compose/newdb-db.yml`. It needs a healthcheck,
+   because `docker compose up --wait` waits for it. Join the shared `test-network`.
+   Add `build:` to build a custom image, as `vertica-db.yml` does.
+2. **Update `dbt_venv.py`**: add `"newdb": "dbt-newdb"` to `ADAPTER_PACKAGES`.
+3. **Update `conftest.py`**: add the database to `db_connection_config`,
+   `database_compose_files`, `setup_database_env` (compose variables), and `dbt_env`
+   (profile variables and the stale `NEWDB_HOST`).
+4. **Add a `newdb` output** to both `profiles.yml` files, with
+   `schema: dbt_constraints_test`.
+5. **Update `config/test-versions.json`**: `"newdb": ["<exact dbt-core pin>"]`.
+6. **Check the test projects** for adapter-dispatched macros with no `default__`, such
+   as `clone_table`, and for tuples of single-database adapters in the tests.
+7. **Run the cell** and compare the collected count with the skipped count.
 
 ### New dbt Version
 

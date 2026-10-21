@@ -1,6 +1,6 @@
 {% macro generate_database_name(custom_database_name, node) -%}
-    {# PostgreSQL, Oracle, and Snowflake: use target.database directly #}
-    {%- if target.type == 'postgres' or target.type == 'oracle' or target.type == 'snowflake' -%}
+    {# PostgreSQL, Oracle, Vertica, and Snowflake: use target.database directly #}
+    {%- if target.type in ('postgres', 'oracle', 'vertica', 'snowflake') -%}
         {{ target.database }}
     {%- elif custom_database_name is none -%}
         {{ target.database }}

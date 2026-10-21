@@ -12,6 +12,7 @@
   "dbt_versions": {
     "postgres": ["1.11.14"],
     "oracle": ["1.12.3"],
+    "vertica": ["1.12.3"],
     "snowflake": ["1.5.12"],
     "fusion": ["2.0.8"],
     "core2": ["2.0.0b2"],
@@ -25,6 +26,7 @@
       "primary target and because the dbt v2 engines run against it.",
       "postgres 1.11.14 - dbt-postgres tops out at 1.11.0, so 1.12.x is not testable.",
       "oracle 1.12.3 - dbt-oracle reaches 1.12.0.",
+      "vertica 1.12.3 - dbt-vertica reaches 1.12.0.",
       "sqlserver is NOT in the matrix. The package has no sqlserver__create_constraints",
       "implementation and no default__, so the on-run-end hook fails at macro dispatch.",
       "Add a cell back only after the package supports SQL Server.",
@@ -73,6 +75,11 @@
     "oracle": {
       "package": "dbt-oracle",
       "image": "gvenzl/oracle-free:23.26.1-slim-faststart"
+    },
+    "vertica": {
+      "package": "dbt-vertica",
+      "image": "dbt-constraints-vertica:25.4.0-0",
+      "comment": "Built locally from docker/vertica on opentext/vertica-k8s:25.4.0-0-multiarch. Vertica 26.1 and later refuse the Community Edition license, so 25.4 is the newest base that needs no license file."
     },
     "snowflake": {
       "package": "dbt-snowflake",

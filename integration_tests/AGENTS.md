@@ -159,7 +159,7 @@ fails. `python3 -m` puts the working directory on `sys.path` and the import reso
 
 Selectors:
 
-- `--database {postgres,oracle,snowflake,fusion,core2,dpos_core,dpos_fusion}`
+- `--database {postgres,oracle,vertica,snowflake,fusion,core2,dpos_core,dpos_fusion}`
 - `--dbt-version <exact pin>`
 - `-m {postgres,oracle,snowflake,fast,slow}`
 
@@ -235,6 +235,12 @@ against skipped.
 - A new matrix key needs an entry in `test-versions.json` and, for adapter
   databases, a compose file. A missing compose file reports as SKIPPED, not
   failed. Check collected-versus-skipped counts when you add a cell.
+- The vertica cell builds its own image from `docker/vertica/`. Vertica 26.1 and
+  later refuse the Community Edition license, so the base stays on
+  `opentext/vertica-k8s:25.4.0-0-multiarch`. The test projects override three
+  dbt-vertica behaviors: the seed COPY (`vertica_load_csv_rows.sql`), the
+  `unique` and `relationships` generic tests (`vertica_generic_tests.sql`), and
+  the incremental strategy of `fact_order_line`. Each file states the reason.
 
 ### SQL and Jinja macros
 

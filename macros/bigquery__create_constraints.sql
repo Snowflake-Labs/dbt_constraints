@@ -1,3 +1,10 @@
+{#- BigQuery enforces only NOT NULL. Its primary, unique and foreign keys are not
+    enforced, so their tests never skip (issue #114). -#}
+{%- macro bigquery__adapter_enforced_constraint_types() -%}
+    {{ return(['not_null']) }}
+{%- endmacro -%}
+
+
 {# Bigquery specific implementation to create a primary key #}
 {%- macro bigquery__create_primary_key(table_relation, column_names, verify_permissions, quote_columns, constraint_name, lookup_cache, rely_clause) -%}
     {%- set constraint_name = dbt_constraints.sanitize_constraint_name((constraint_name or table_relation.identifier ~ "_" ~ column_names|join('_') ~ "_PK")) -%}

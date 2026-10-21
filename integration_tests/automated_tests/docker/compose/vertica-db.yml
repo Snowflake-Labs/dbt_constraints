@@ -1,0 +1,25 @@
+services:
+  vertica:
+    build: ../vertica
+    image: dbt-constraints-vertica:25.4.0-0
+    container_name: ${COMPOSE_PROJECT_NAME:-dbt-test}-vertica
+    environment:
+      VERTICA_DBADMIN_PASSWORD: ${VERTICA_DBADMIN_PASSWORD}
+      APP_DB_USER: ${VERTICA_USER}
+      APP_DB_PASSWORD: ${VERTICA_PASSWORD}
+    ports:
+      - "5433:5433"
+    networks:
+      - test-network
+    healthcheck:
+      # The entrypoint writes this file after the database and the app user exist.
+      test: ["CMD", "test", "-f", "/tmp/vertica-ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+
+networks:
+  test-network:
+    name: ${COMPOSE_PROJECT_NAME:-dbt-test}-network
+    driver: bridge

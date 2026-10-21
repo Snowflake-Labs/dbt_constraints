@@ -68,15 +68,25 @@ def test_constraints_created(database: str, dbt_version: str, run_dbt):
 
     print(f"\n🔍 Verifying constraints exist in {database}...")
 
-    if database == "postgres":
-        # The schema name is a string literal, so it needs single quotes. Double
-        # quotes would make PostgreSQL read it as an identifier. The whole --args
-        # value is shell double-quoted so the single quotes survive, and dbt parses
-        # it as a YAML plain scalar.
-        count_sql = (
+    # The schema name is a string literal, so it needs single quotes. Double quotes
+    # would make the database read it as an identifier. The whole --args value is
+    # shell double-quoted so the single quotes survive, and dbt parses it as a YAML
+    # plain scalar. That plain scalar must contain no comma.
+    count_queries = {
+        "postgres": (
             "SELECT COUNT(*) FROM information_schema.table_constraints "
             "WHERE constraint_schema = 'dbt_constraints_test'"
-        )
+        ),
+        # v_catalog.table_constraints has no schema name column. constraint_columns
+        # has one row per constrained column, so count distinct constraints.
+        "vertica": (
+            "SELECT COUNT(DISTINCT constraint_id) FROM v_catalog.constraint_columns "
+            "WHERE table_schema = 'dbt_constraints_test'"
+        ),
+    }
+
+    count_sql = count_queries.get(database)
+    if count_sql:
         result = run_dbt(f'dbt run-operation query --args "{{sql: {count_sql}}}"')
         assert result.returncode == 0, (
             f"Constraint count query failed:\n{result.stdout}"
@@ -88,7 +98,7 @@ def test_constraints_created(database: str, dbt_version: str, run_dbt):
         constraint_count = int(match.group(1))
         assert constraint_count > 0, (
             f"Expected dbt_constraints to create constraints in dbt_constraints_test, "
-            f"but information_schema.table_constraints reports {constraint_count}"
+            f"but the {database} catalog reports {constraint_count}"
         )
         print(f"✅ Found {constraint_count} constraints in dbt_constraints_test")
 
